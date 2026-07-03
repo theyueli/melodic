@@ -5,7 +5,15 @@
       <stop offset="1" stop-color="#e8eaed"/>
     </linearGradient>
   </defs>
+  <!-- card -->
   <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)" stroke="#c7cbd1" stroke-width="8"/>
-  <text x="512" y="700" font-family="Georgia, 'Times New Roman', serif" font-size="500" font-weight="bold" text-anchor="middle" fill="#2f3437">M</text>
-  <rect x="352" y="760" width="320" height="26" rx="13" fill="#4183c4"/>
+  <!-- beamed eighth notes -->
+  <g fill="#2f3437">
+    <ellipse cx="400" cy="700" rx="92" ry="66" transform="rotate(-16 400 700)"/>
+    <ellipse cx="668" cy="656" rx="92" ry="66" transform="rotate(-16 668 656)"/>
+    <rect x="464" y="330" width="28" height="382"/>
+    <rect x="732" y="286" width="28" height="382"/>
+  </g>
+  <!-- beam in the accent blue -->
+  <path d="M464 322 L760 278 L760 362 L464 406 Z" fill="#4183c4"/>
 </svg>
