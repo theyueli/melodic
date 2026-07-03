@@ -613,12 +613,12 @@ const WELCOME = `# Welcome to Melodic
 
 - Open a file with \`⌘O\`, or a whole folder with \`⇧⌘O\`
 - Toggle the sidebar with \`⇧⌘L\` — it has **Files** and **Outline** tabs
-- Toggle raw **source mode** with \`⌘/\`
+- Find & replace with \`⌘F\`, raw **source mode** with \`⌘/\`
 - Switch theme in *View → Theme* (GitHub / Night)
 
 ## Things it renders
 
-1. Inline **bold**, *italic*, ~~strike~~, ==highlight==, \`code\`, and [links](https://example.com)
+1. Inline **bold**, *italic*, ~~strike~~, ==highlight==, \`code\`, [links](https://example.com), and footnotes[^1]
 2. Task lists — click the checkbox:
 
 - [x] Build a markdown editor
@@ -635,13 +635,28 @@ function greet(name) {
 | Key | Action |
 | ---- | ---- |
 | ⌘S | Save |
-| ⌘/ | Source mode |
+| ⌘P | Print |
 
-And math, via KaTeX:
+Math, via KaTeX:
 
 $$
 e^{i\\pi} + 1 = 0
 $$
+
+## Sheet music
+
+Melodic plays its namesake: write [ABC notation](https://abcnotation.com) in a \`\`\`abc fence and it engraves itself. Click the sheet to edit the notation — hover it and press ▶ to listen. *Paragraph → Music Sheet* (⌥⌘M) inserts a starter tune.
+
+\`\`\`abc
+X: 1
+T: Ode to Joy
+M: 4/4
+L: 1/4
+K: C
+E E F G | G F E D | C C D E | E3/2 D/2 D2 |
+\`\`\`
+
+[^1]: Like this one — hover the marker to preview it, click to jump here.
 `;
 
 (async function init() {
