@@ -52,6 +52,11 @@ drag it into `/Applications`. It registers as an editor for `.md` files, so
 - **Sidebar** (⇧⌘L) with **Files** (open a folder) and **Outline** tabs
 - **Source mode** (⌘/) — edit the whole document as raw markdown
 - **Themes** — GitHub (light) and Night (dark)
+- **Find & Replace** (⌘F) — case/whole-word/regex, highlight-all, replace one or all
+- **Visual table editing** — click a table for an editable grid: add/remove rows
+  and columns, set column alignment, Tab between cells
+- **Smart clipboard** — pasting rich text/HTML converts to markdown; ⇧⌘V pastes
+  plain; *Copy as Rich Text* pastes formatted into Word/Gmail
 - **Export to HTML and PDF**, and native printing (⌘P)
 - Word count, undo/redo, drag-and-drop to open, unsaved-changes protection
 
@@ -77,6 +82,9 @@ Melodic is engineered to stay instant on documents that choke other editors
 | ⌘S / ⇧⌘S | Save / Save As |
 | ⌘/ | Toggle source mode |
 | ⌘P | Print |
+| ⌘F / ⌥⌘F | Find / Find & Replace |
+| ⌘G / ⇧⌘G | Find next / previous |
+| ⇧⌘V | Paste as plain text |
 | ⇧⌘L | Toggle sidebar |
 | ⌘1…⌘6, ⌘0 | Heading level / paragraph |
 | ⌘B, ⌘I, ⌘U, ⌘E | Bold, italic, underline, inline code |

@@ -1,5 +1,7 @@
 import { Editor } from './editor.js';
 import { setBaseDir, renderBlockHtml, splitBlocks, ensureLibs, highlightAllSync } from './markdown.js';
+import { FindBar } from './find.js';
+import { installSmartPaste, pastePlain, copyRich, htmlToMarkdown } from './clipboard.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -22,6 +24,21 @@ const editor = new Editor(writeEl, {
   onNavigateAnchor: (anchor) => editor.scrollToHeadingText(anchor)
 });
 if (window.api.dev) window.__editor = editor; // test harness hook, dev builds only
+
+const findBar = new FindBar(editor, $('#content'), { onDidChangeDoc: () => onDocChange() });
+if (window.api.dev) window.__find = findBar;
+if (window.api.dev) window.__clip = { htmlToMarkdown };
+
+installSmartPaste();
+
+/** Render a markdown fragment to themed-free HTML for the rich clipboard. */
+async function renderClipboardHtml(md) {
+  await ensureLibs();
+  const tpl = document.createElement('template');
+  tpl.innerHTML = splitBlocks(md).map((b) => renderBlockHtml(b)).join('\n');
+  highlightAllSync(tpl.content);
+  return tpl.innerHTML;
+}
 
 function currentText() {
   return sourceMode ? sourceTA.value : editor.getText();
@@ -58,6 +75,7 @@ function onDocChange() {
     updateWordCount();
     updateOutline();
     updateDocLang();
+    if (findBar.visible) findBar.refresh();
     sendDirty(isDirty());
   }, 250);
 }
@@ -104,7 +122,7 @@ function updateWordCount() {
     const active = editor.active;
     for (let i = 0; i < editor.blocks.length; i++) {
       if (active && i === active.index) {
-        total += countWordsIn(active.ta.value);
+        total += countWordsIn(editor.activeValue());
         continue;
       }
       const src = editor.blocks[i];
@@ -475,6 +493,20 @@ window.api.onMenu(async (action, arg) => {
       return editor.redo();
     case 'copy-markdown':
       return navigator.clipboard.writeText(currentText());
+    case 'copy-rich':
+      return copyRich(() => currentText(), renderClipboardHtml).catch(() => {});
+    case 'paste-plain':
+      return pastePlain();
+    case 'find':
+      if (sourceMode) return; // source mode: use the textarea's native search via ⌘F? not available — ignore
+      return findBar.open({ replace: false });
+    case 'find-replace':
+      if (sourceMode) return;
+      return findBar.open({ replace: true });
+    case 'find-next':
+      return findBar.visible ? findBar.next() : undefined;
+    case 'find-prev':
+      return findBar.visible ? findBar.prev() : undefined;
     default:
       if (!sourceMode) editor.applyAction(action, arg);
   }

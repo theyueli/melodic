@@ -437,9 +437,16 @@ function buildMenu() {
         { role: 'cut' },
         { role: 'copy' },
         { role: 'paste' },
+        { label: 'Paste as Plain Text', accelerator: 'Shift+CmdOrCtrl+V', click: () => send('paste-plain') },
         { role: 'selectAll' },
         { type: 'separator' },
-        { label: 'Copy as Markdown', click: () => send('copy-markdown') }
+        { label: 'Find…', accelerator: 'CmdOrCtrl+F', click: () => send('find') },
+        { label: 'Find and Replace…', accelerator: 'Alt+CmdOrCtrl+F', click: () => send('find-replace') },
+        { label: 'Find Next', accelerator: 'CmdOrCtrl+G', click: () => send('find-next') },
+        { label: 'Find Previous', accelerator: 'Shift+CmdOrCtrl+G', click: () => send('find-prev') },
+        { type: 'separator' },
+        { label: 'Copy as Markdown', click: () => send('copy-markdown') },
+        { label: 'Copy as Rich Text', click: () => send('copy-rich') }
       ]
     },
     {

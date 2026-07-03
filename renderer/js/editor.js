@@ -7,6 +7,7 @@ import {
   scheduleHighlight,
   onLibLoaded
 } from './markdown.js';
+import { buildTableGrid } from './table-grid.js';
 
 const LIST_ITEM_RE = /^(\s*)([-+*]|\d{1,9}[.)])(\s+\[[ xX]\])?(\s+)/;
 
@@ -69,8 +70,33 @@ export class Editor {
 
   getText() {
     const parts = this.blocks.slice();
-    if (this.active) parts[this.active.index] = this.active.ta.value;
+    if (this.active) parts[this.active.index] = this.activeValue();
     return parts.join('\n\n');
+  }
+
+  /** Source of the block being edited (textarea or table grid). */
+  activeValue() {
+    if (!this.active) return '';
+    return this.active.ta ? this.active.ta.value : this.active.getValue();
+  }
+
+  getBlockEl(index) {
+    return this.container.children[index] || null;
+  }
+
+  /** Materialize (if lazy) and return a block's element. */
+  ensureBlockRendered(index) {
+    const el = this.getBlockEl(index);
+    if (el) this._materializeEl(el);
+    return el;
+  }
+
+  /** Replace one block's source (used by find & replace). */
+  replaceBlockSource(index, source, { undo = true } = {}) {
+    if (index < 0 || index >= this.blocks.length) return;
+    if (this.active && this.active.index === index) this.commitActive();
+    if (undo) this.pushUndo();
+    this._replaceBlocks(index, 1, [source]);
   }
 
   renderAll() {
@@ -232,7 +258,7 @@ export class Editor {
     return {
       text: this.getText(),
       index: this.active ? this.active.index : this.lastActiveIndex,
-      caret: this.active ? this.active.ta.selectionStart : 0
+      caret: this.active && this.active.ta ? this.active.ta.selectionStart : 0
     };
   }
 
@@ -270,11 +296,13 @@ export class Editor {
 
   /* ---------------- activation ---------------- */
 
-  activate(index, caret = 'end') {
+  activate(index, caret = 'end', opts = {}) {
     if (index < 0 || index >= this.blocks.length) return;
     if (this.active && this.active.index === index) {
-      this._setCaret(this.active.ta, caret);
-      this.active.ta.focus();
+      if (this.active.ta) {
+        this._setCaret(this.active.ta, caret);
+        this.active.ta.focus();
+      }
       return;
     }
     // committing may remove or split the previously active block,
@@ -294,6 +322,12 @@ export class Editor {
     }
     const source = this.blocks[index];
     const kind = blockKind(source);
+
+    // tables edit visually as a cell grid (MD button falls back to source)
+    if (kind === 'table' && !opts.forceSource) {
+      this._activateTableGrid(index, el, source, opts.cell);
+      return;
+    }
 
     const ta = document.createElement('textarea');
     ta.className = 'block-source' + (isMonoKind(kind) ? ' mono' : '');
@@ -341,6 +375,38 @@ export class Editor {
     });
   }
 
+  _activateTableGrid(index, el, source, cell) {
+    el.classList.add('md-editing');
+    const grid = buildTableGrid(el, source, {
+      onCommit: () => this.commitActive(),
+      onExitToSource: (src) => {
+        // hand off to the raw-source textarea, keeping current edits
+        this.active = null;
+        el.classList.remove('md-editing');
+        this._replaceBlocks(index, 1, [src]);
+        this.activate(index, 'start', { forceSource: true });
+      }
+    });
+    this.active = { index, ta: null, getValue: grid.getValue };
+    this.lastActiveIndex = index;
+    const at = cell || { row: 0, col: 0 };
+    grid.focusCell(at.row, at.col);
+
+    grid.el.addEventListener('focusout', () => {
+      setTimeout(() => {
+        if (
+          this.active &&
+          this.active.index === index &&
+          !this.active.ta &&
+          !grid.el.contains(document.activeElement) &&
+          document.hasFocus()
+        ) {
+          this.commitActive();
+        }
+      }, 0);
+    });
+  }
+
   _setCaret(ta, caret) {
     let pos;
     if (caret === 'end') pos = ta.value.length;
@@ -364,8 +430,8 @@ export class Editor {
    */
   commitActive() {
     if (!this.active) return;
-    const { index, ta } = this.active;
-    const value = ta.value;
+    const index = this.active.index;
+    const value = this.activeValue();
     this.active = null;
 
     let sources;
@@ -431,7 +497,20 @@ export class Editor {
       return;
     }
 
-    this.activate(index, this._caretFromPoint(blockEl, index, e));
+    // clicking a rendered table cell lands the grid focus on that cell
+    let cell = null;
+    const cellEl = e.target.closest('td, th');
+    if (cellEl && blockEl.contains(cellEl)) {
+      const tr = cellEl.parentElement;
+      const col = Array.prototype.indexOf.call(tr.children, cellEl);
+      const row =
+        cellEl.tagName === 'TH'
+          ? 0
+          : 1 + Array.prototype.indexOf.call(tr.parentElement.children, tr);
+      cell = { row, col };
+    }
+
+    this.activate(index, this._caretFromPoint(blockEl, index, e), { cell });
   }
 
   _caretFromPoint(blockEl, index, e) {
@@ -752,6 +831,7 @@ export class Editor {
   _wrapSelection(left, right = left) {
     if (!this._ensureActive()) return;
     const ta = this.active.ta;
+    if (!ta) return; // table grid — inline formatting applies inside cells natively
     this.pushUndo();
     const s = ta.selectionStart;
     const en = ta.selectionEnd;
@@ -782,6 +862,7 @@ export class Editor {
   _prefixLines(prefixFn) {
     if (!this._ensureActive()) return;
     const ta = this.active.ta;
+    if (!ta) return;
     this.pushUndo();
     const s = ta.selectionStart;
     const en = ta.selectionEnd;
@@ -827,6 +908,7 @@ export class Editor {
       case 'link': {
         if (!this._ensureActive()) return;
         const ta = this.active.ta;
+        if (!ta) return;
         this.pushUndo();
         const s = ta.selectionStart, en = ta.selectionEnd;
         const sel = ta.value.slice(s, en) || 'link';
@@ -839,6 +921,7 @@ export class Editor {
       case 'image': {
         if (!this._ensureActive()) return;
         const ta = this.active.ta;
+        if (!ta) return;
         this.pushUndo();
         const s = ta.selectionStart, en = ta.selectionEnd;
         const sel = ta.value.slice(s, en) || 'alt';
@@ -851,6 +934,7 @@ export class Editor {
       case 'clear-format': {
         if (!this._ensureActive()) return;
         const ta = this.active.ta;
+        if (!ta) return;
         this.pushUndo();
         const s = ta.selectionStart, en = ta.selectionEnd;
         const sel = ta.value.slice(s, en);
@@ -870,6 +954,7 @@ export class Editor {
       case 'heading': {
         if (!this._ensureActive()) return;
         const ta = this.active.ta;
+        if (!ta) return;
         this.pushUndo();
         const n = arg | 0;
         const val = ta.value;
@@ -899,7 +984,7 @@ export class Editor {
           /^\s*[-+*]\s+\[[ xX]\]\s/.test(l) ? l.replace(/^(\s*)[-+*]\s+\[[ xX]\]\s+/, '$1') : '- [ ] ' + l
         );
       case 'code-fence': {
-        if (this.active && this.active.ta.value.trim()) {
+        if (this.active && this.active.ta && this.active.ta.value.trim()) {
           const ta = this.active.ta;
           this.pushUndo();
           ta.value = '```\n' + ta.value + '\n```';

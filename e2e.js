@@ -130,6 +130,61 @@
       await sleep(400);
       results.cjkLangDetection = zhSet && !write.hasAttribute('lang');
     }
+
+    // 11. find & replace over block sources
+    {
+      const ed = window.__editor;
+      const fb = window.__find;
+      ed.setText('# Doc\n\nthe quick fox\n\nquick again `quick`');
+      await sleep(80);
+      fb.open({ replace: true });
+      fb.input.value = 'quick';
+      fb.refresh();
+      const found = fb.matches.length === 3;
+      fb.replaceInput.value = 'slow';
+      fb.replaceAll();
+      await sleep(80);
+      const txt = ed.getText();
+      fb.close();
+      results.findReplace = found && txt.includes('the slow fox') && txt.includes('slow again `slow`');
+    }
+
+    // 12. visual table editing: grid appears, add row via toolbar, edit cell, commit
+    {
+      const ed = window.__editor;
+      ed.setText('| a | b |\n| --- | --- |\n| 1 | 2 |');
+      await sleep(80);
+      ed.activate(0, 0);
+      await sleep(50);
+      const grid = write.querySelector('table.table-grid');
+      const gridShown = !!grid && !write.querySelector('textarea.block-source');
+      write.querySelector('[data-act="row-add"]').click();
+      await sleep(30);
+      const cell = write.querySelector('[data-row="1"][data-col="0"]');
+      cell.textContent = 'NEW';
+      ed.commitActive();
+      await sleep(50);
+      const txt = ed.getText();
+      results.tableGrid =
+        gridShown && txt.split('\n').length === 4 && txt.includes('| NEW |');
+    }
+
+    // 13. smart paste converts HTML to markdown
+    {
+      const ed = window.__editor;
+      ed.setText('start ');
+      await sleep(50);
+      ed.activate(0, 'end');
+      const ta = write.querySelector('textarea.block-source');
+      const dt = new DataTransfer();
+      dt.setData('text/html', '<p>Hello <strong>bold</strong> and <em>em</em></p>');
+      dt.setData('text/plain', 'Hello bold and em');
+      ta.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+      // turndown loads lazily on first paste
+      for (let i = 0; i < 40 && !ta.value.includes('**bold**'); i++) await sleep(100);
+      results.smartPaste = ta.value.includes('Hello **bold** and *em*');
+      key(ta, 'Escape');
+    }
   } catch (err) {
     results.error = String(err && err.stack ? err.stack : err);
   }
