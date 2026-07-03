@@ -11,7 +11,11 @@ The document is always shown rendered — click into any block and its markdown
 source is revealed *in place* for editing; click away (or press `Esc`) and it
 renders back. No split preview pane.
 
-![Melodic, GitHub theme — the third block is being edited in place](docs/screenshot-light.png)
+![Melodic — the intro paragraph is being edited in place; everything else stays rendered](docs/screenshot-light.png)
+
+Write music the way you write prose — ` ```abc ` fences engrave themselves and can play:
+
+![Tables, KaTeX math, and an engraved, playable Bach score (BWV 1056)](docs/screenshot-music.png)
 
 <details>
 <summary>Night theme</summary>
@@ -55,7 +59,10 @@ drag it into `/Applications`. It registers as an editor for `.md` files, so
 - `==highlight==`, **bold**, *italic*, ~~strike~~, `code`, underline
 - **Sidebar** (⇧⌘L) with **Files** (open a folder) and **Outline** tabs
 - **Source mode** (⌘/) — edit the whole document as raw markdown
-- **Themes** — GitHub (light) and Night (dark)
+- **Themes** — GitHub (light) and Night (dark), with New York serif typography
+- **Chinese reading comfort** — predominantly-Chinese documents automatically get
+  CLREQ-informed typography: justified 42-char measure, 禁则 line breaking,
+  CJK–Latin autospacing, and upright 楷体 emphasis
 - **Footnotes** — `[^1]` references with hover preview and click-to-jump
 - **Multiple windows** (⇧⌘N) — files from Finder open in a fresh window when the
   current one is in use
@@ -100,6 +107,7 @@ Melodic is engineered to stay instant on documents that choke other editors
 | ⌘B, ⌘I, ⌘U, ⌘E | Bold, italic, underline, inline code |
 | ⌃⇧X, ⇧⌘H, ⌘K | Strike, highlight, link |
 | ⌥⌘C / ⌥⌘B / ⌥⌘Q | Code fence / math block / quote |
+| ⌥⌘M | Music sheet |
 | ⌥⌘O / ⌥⌘U / ⌥⌘X | Ordered / unordered / task list |
 | Esc | Commit the block you're editing |
 
