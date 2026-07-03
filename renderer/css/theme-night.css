@@ -24,8 +24,8 @@ html {
 }
 
 body {
-  font-family: "Open Sans", "Clear Sans", "Helvetica Neue", Helvetica, Arial,
-    "Segoe UI Emoji", "SF Pro", sans-serif;
+  /* app chrome (sidebar, footer) stays native sans */
+  font-family: -apple-system, system-ui, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
   color: var(--text-color);
   line-height: 1.6;
   background: var(--bg-color);
@@ -36,6 +36,8 @@ body {
   margin: 0 auto;
   padding: 48px 30px 100px 30px;
   caret-color: #6dc1e7;
+  /* prose reads in New York — Apple's book serif — with elegant fallbacks */
+  font-family: ui-serif, "New York", "Iowan Old Style", Charter, "Songti SC", Georgia, serif;
 }
 
 @media only screen and (min-width: 1400px) {
@@ -52,10 +54,13 @@ body {
   position: relative;
   margin-top: 1rem;
   margin-bottom: 1rem;
-  font-weight: bold;
+  font-weight: 600;
   line-height: 1.4;
   cursor: text;
   color: #dedede;
+  /* headings contrast in the native sans */
+  font-family: -apple-system, system-ui, "PingFang SC", sans-serif;
+  letter-spacing: -0.01em;
 }
 #write h1 { font-size: 2.25em; line-height: 1.2; border-bottom: 1px solid var(--heading-border-color); }
 #write h2 { font-size: 1.75em; line-height: 1.225; border-bottom: 1px solid var(--heading-border-color); }
