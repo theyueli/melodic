@@ -117,6 +117,19 @@
       results.checkboxOrdinalSafe =
         src.includes('`[x]`') && src.includes('- [x] ship the release');
     }
+
+    // 10. Chinese documents get lang="zh-Hans" (CJK typography); Latin docs don't
+    {
+      const ed = window.__editor;
+      ed.setText('# 中文文档\n\n' + '这是一个包含大量汉字的中文文档，用于验证语言检测。'.repeat(10));
+      ed.opts.onChange();
+      await sleep(400);
+      const zhSet = write.getAttribute('lang') === 'zh-Hans';
+      ed.setText('# English\n\n' + 'This is a plain English document for language detection. '.repeat(10));
+      ed.opts.onChange();
+      await sleep(400);
+      results.cjkLangDetection = zhSet && !write.hasAttribute('lang');
+    }
   } catch (err) {
     results.error = String(err && err.stack ? err.stack : err);
   }

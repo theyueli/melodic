@@ -159,3 +159,40 @@ body {
   background: #4a89dc;
   color: #fff;
 }
+
+/* ---------- Chinese reading comfort ----------
+ * Applied when language detection marks the document zh-Hans.
+ * (#write[lang] is set by the renderer; exports carry the same attribute.) */
+#write:lang(zh-Hans) {
+  /* hanzi are denser than Latin — give lines more air (clreq: 1.5–2, sweet spot 1.7–1.8) */
+  line-height: 1.8;
+  /* ~42 full-width characters per line — the researched comfort measure for Chinese */
+  max-width: 42em;
+  /* uniform glyph widths reward an even right edge */
+  text-align: justify;
+  /* proper CJK line-breaking rules: no 。，、 at line starts (禁则) */
+  line-break: strict;
+  overflow-wrap: break-word;
+  /* automatic spacing at CJK–Latin/digit boundaries (盘古之白) */
+  text-autospace: normal;
+  /* CLREQ-style compression of consecutive full-width punctuation */
+  text-spacing-trim: normal;
+  /* never slant hanzi that lack an italic face */
+  font-synthesis-style: none;
+}
+#write:lang(zh-Hans) pre,
+#write:lang(zh-Hans) code {
+  /* code renders verbatim — no injected spacing */
+  text-autospace: no-autospace;
+}
+#write:lang(zh-Hans) h1, #write:lang(zh-Hans) h2, #write:lang(zh-Hans) h3,
+#write:lang(zh-Hans) h4, #write:lang(zh-Hans) h5, #write:lang(zh-Hans) h6 {
+  /* the Latin headings' negative tracking doesn't suit hanzi */
+  letter-spacing: 0;
+}
+#write:lang(zh-Hans) em {
+  /* Chinese has no italics: emphasis reads in upright Kaiti, while Latin
+   * inside the emphasis keeps its true italic */
+  font-family: ui-serif, "New York", "Iowan Old Style", Charter, "Kaiti SC", "Songti SC", serif;
+  font-synthesis-style: none;
+}

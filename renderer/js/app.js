@@ -57,8 +57,31 @@ function onDocChange() {
     changeTimer = 0;
     updateWordCount();
     updateOutline();
+    updateDocLang();
     sendDirty(isDirty());
   }, 250);
+}
+
+/* Language-aware typography: predominantly-Chinese documents get CJK reading
+ * rules (line height, justification, kinsoku, CJK–Latin autospacing, Kaiti
+ * emphasis) via #write:lang(zh-Hans) selectors in the theme CSS. */
+function detectDocLang(text) {
+  const sample = text.length > 40000 ? text.slice(0, 40000) : text;
+  let cjk = 0;
+  let latin = 0;
+  for (let i = 0; i < sample.length; i++) {
+    const c = sample.charCodeAt(i);
+    if ((c >= 0x4e00 && c <= 0x9fff) || (c >= 0x3400 && c <= 0x4dbf)) cjk++;
+    else if ((c >= 65 && c <= 90) || (c >= 97 && c <= 122)) latin++;
+  }
+  // enough hanzi to matter, and at least ~20% of the letter mass
+  return cjk > 50 && cjk * 4 > latin ? 'zh-Hans' : '';
+}
+
+function updateDocLang() {
+  const lang = detectDocLang(currentText());
+  if (lang) writeEl.setAttribute('lang', lang);
+  else writeEl.removeAttribute('lang');
 }
 
 /* word count with a per-block cache: only blocks that changed are recounted */
@@ -118,6 +141,7 @@ function loadDocument(text, path) {
   window.api.setDirty(false);
   updateWordCount();
   updateOutline();
+  updateDocLang();
   markActiveInTree();
   scrollEl.scrollTop = 0;
 }
@@ -184,8 +208,9 @@ async function buildExportHtml() {
     }
   }
   const title = filePath ? filePath.split('/').pop().replace(/\.\w+$/, '') : 'Untitled';
+  const lang = detectDocLang(text);
   const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>${title}</title>
+<html${lang ? ` lang="${lang}"` : ''}><head><meta charset="utf-8"><title>${title}</title>
 <style>${cssTexts.join('\n')}
 body { padding: 0; } #write { max-width: 860px; margin: 0 auto; padding: 40px 30px; }
 @media print {
@@ -195,7 +220,7 @@ body { padding: 0; } #write { max-width: 860px; margin: 0 auto; padding: 40px 30
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 </style></head>
-<body><div id="write">${body}</div></body></html>`;
+<body><div id="write"${lang ? ` lang="${lang}"` : ''}>${body}</div></body></html>`;
   return { title, html };
 }
 if (window.api.dev) window.__buildExportHtml = buildExportHtml; // dev harness hook
