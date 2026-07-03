@@ -52,8 +52,8 @@ drag it into `/Applications`. It registers as an editor for `.md` files, so
 - **Sidebar** (⇧⌘L) with **Files** (open a folder) and **Outline** tabs
 - **Source mode** (⌘/) — edit the whole document as raw markdown
 - **Themes** — GitHub (light) and Night (dark)
-- Word count, undo/redo, drag-and-drop to open, export to HTML,
-  unsaved-changes protection
+- **Export to HTML and PDF**, and native printing (⌘P)
+- Word count, undo/redo, drag-and-drop to open, unsaved-changes protection
 
 ## Built for speed
 
@@ -76,6 +76,7 @@ Melodic is engineered to stay instant on documents that choke other editors
 | ⌘N / ⌘O / ⇧⌘O | New / Open file / Open folder |
 | ⌘S / ⇧⌘S | Save / Save As |
 | ⌘/ | Toggle source mode |
+| ⌘P | Print |
 | ⇧⌘L | Toggle sidebar |
 | ⌘1…⌘6, ⌘0 | Heading level / paragraph |
 | ⌘B, ⌘I, ⌘U, ⌘E | Bold, italic, underline, inline code |

@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('api', {
   readFile: (p) => ipcRenderer.invoke('file:read', p),
   saveFile: (opts) => ipcRenderer.invoke('file:save', opts),
   exportHtml: (opts) => ipcRenderer.invoke('export:html', opts),
+  exportPdf: (opts) => ipcRenderer.invoke('export:pdf', opts),
+  printHtml: (opts) => ipcRenderer.invoke('print:html', opts),
   confirmDiscard: () => ipcRenderer.invoke('app:confirmDiscard'),
   setDirty: (d) => ipcRenderer.send('app:setDirty', d),
   setFile: (p) => ipcRenderer.send('app:setFile', p),

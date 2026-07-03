@@ -250,6 +250,81 @@ ipcMain.handle('export:html', async (e, { defaultName, html }) => {
   }
 });
 
+/**
+ * Render export HTML in a hidden window (the live editor view is virtualized
+ * and contains app chrome, so PDF/print always go through the clean export
+ * pipeline). Returns { window, cleanup } once the page has finished loading.
+ */
+async function renderHiddenExport(html) {
+  const tmpPath = path.join(
+    app.getPath('temp'),
+    `melodic-export-${process.pid}-${Date.now()}.html`
+  );
+  fs.writeFileSync(tmpPath, html, 'utf8');
+  const hidden = new BrowserWindow({
+    show: false,
+    webPreferences: { sandbox: true }
+  });
+  const cleanup = () => {
+    if (!hidden.isDestroyed()) hidden.destroy();
+    fs.unlink(tmpPath, () => {});
+  };
+  try {
+    await hidden.loadFile(tmpPath);
+    // brief settle for fonts/layout before capture
+    await new Promise((r) => setTimeout(r, 250));
+    return { window: hidden, cleanup };
+  } catch (err) {
+    cleanup();
+    throw err;
+  }
+}
+
+ipcMain.handle('export:pdf', async (e, { defaultName, html, path: explicitPath }) => {
+  let target = explicitPath;
+  if (!target) {
+    const res = await dialog.showSaveDialog(win, {
+      defaultPath: (defaultName || 'Untitled') + '.pdf',
+      filters: [{ name: 'PDF', extensions: ['pdf'] }]
+    });
+    if (res.canceled || !res.filePath) return { ok: false, canceled: true };
+    target = res.filePath;
+  }
+  let rendered = null;
+  try {
+    rendered = await renderHiddenExport(html);
+    const data = await rendered.window.webContents.printToPDF({
+      printBackground: true,
+      margins: { top: 0.6, bottom: 0.6, left: 0.6, right: 0.6 } // inches
+    });
+    fs.writeFileSync(target, data);
+    return { ok: true, path: target };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  } finally {
+    if (rendered) rendered.cleanup();
+  }
+});
+
+ipcMain.handle('print:html', async (e, { html }) => {
+  let rendered = null;
+  try {
+    rendered = await renderHiddenExport(html);
+    return await new Promise((resolve) => {
+      rendered.window.webContents.print({ printBackground: true }, (ok, reason) => {
+        rendered.cleanup();
+        rendered = null;
+        resolve(ok || reason === 'cancelled'
+          ? { ok: true }
+          : { ok: false, error: reason || 'print failed' });
+      });
+    });
+  } catch (err) {
+    if (rendered) rendered.cleanup();
+    return { ok: false, error: String(err.message || err) };
+  }
+});
+
 ipcMain.handle('app:confirmDiscard', () => {
   if (!isDirty) return true;
   const choice = dialog.showMessageBoxSync(win, {
@@ -346,6 +421,9 @@ function buildMenu() {
         { label: 'Save As…', accelerator: 'Shift+CmdOrCtrl+S', click: () => send('save-as') },
         { type: 'separator' },
         { label: 'Export as HTML…', click: () => send('export-html') },
+        { label: 'Export as PDF…', click: () => send('export-pdf') },
+        { type: 'separator' },
+        { label: 'Print…', accelerator: 'CmdOrCtrl+P', click: () => send('print') },
         { type: 'separator' },
         isMac ? { role: 'close' } : { role: 'quit' }
       ]

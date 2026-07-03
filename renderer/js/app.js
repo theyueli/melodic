@@ -161,13 +161,12 @@ async function save(saveAs = false, thenClose = false) {
 
 /* ---------------- export ---------------- */
 
-async function exportHtml() {
-  try {
-    await ensureLibs(); // math + syntax highlighting must be live for export
-  } catch {
-    alert('Export failed: could not load the math/highlighting libraries. Please try again.');
-    return;
-  }
+/**
+ * Render the whole document to a standalone HTML page (theme CSS, KaTeX and
+ * syntax highlighting inlined). Shared by HTML export, PDF export and Print.
+ */
+async function buildExportHtml() {
+  await ensureLibs(); // math + syntax highlighting must be live for export
   const text = currentText();
   const blocks = splitBlocks(text);
   const tpl = document.createElement('template');
@@ -189,9 +188,57 @@ async function exportHtml() {
 <html><head><meta charset="utf-8"><title>${title}</title>
 <style>${cssTexts.join('\n')}
 body { padding: 0; } #write { max-width: 860px; margin: 0 auto; padding: 40px 30px; }
+@media print {
+  #write { max-width: none; padding: 0; }
+  pre, table, blockquote, .math-block { break-inside: avoid; }
+  h1, h2, h3, h4, h5, h6 { break-after: avoid; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
 </style></head>
 <body><div id="write">${body}</div></body></html>`;
-  await window.api.exportHtml({ defaultName: title, html });
+  return { title, html };
+}
+if (window.api.dev) window.__buildExportHtml = buildExportHtml; // dev harness hook
+
+const LIB_FAIL_MSG = 'could not load the math/highlighting libraries. Please try again.';
+
+async function exportHtml() {
+  let out;
+  try {
+    out = await buildExportHtml();
+  } catch {
+    alert('Export failed: ' + LIB_FAIL_MSG);
+    return;
+  }
+  await window.api.exportHtml({ defaultName: out.title, html: out.html });
+}
+
+async function exportPdf() {
+  let out;
+  try {
+    out = await buildExportHtml();
+  } catch {
+    alert('Export failed: ' + LIB_FAIL_MSG);
+    return;
+  }
+  const res = await window.api.exportPdf({ defaultName: out.title, html: out.html });
+  if (res && res.ok === false && !res.canceled) {
+    alert('PDF export failed:\n' + (res.error || 'unknown error'));
+  }
+}
+
+async function printDoc() {
+  let out;
+  try {
+    out = await buildExportHtml();
+  } catch {
+    alert('Print failed: ' + LIB_FAIL_MSG);
+    return;
+  }
+  const res = await window.api.printHtml({ html: out.html });
+  if (res && res.ok === false) {
+    alert('Print failed:\n' + (res.error || 'unknown error'));
+  }
 }
 
 /* ---------------- source mode ---------------- */
@@ -388,6 +435,8 @@ window.api.onMenu(async (action, arg) => {
     case 'save-as': return save(true);
     case 'save-and-close': return save(false, true);
     case 'export-html': return exportHtml();
+    case 'export-pdf': return exportPdf();
+    case 'print': return printDoc();
     case 'toggle-sidebar': return toggleSidebar();
     case 'sidebar-outline': return showSidebarTab('outline');
     case 'sidebar-files': return showSidebarTab('files');
