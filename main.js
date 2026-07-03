@@ -136,11 +136,13 @@ function createWindow() {
     });
     win.webContents.on('did-finish-load', () => {
       setTimeout(async () => {
+        let failed = false;
         try {
           const e2ePath = path.join(__dirname, 'e2e.js');
           if (fs.existsSync(e2ePath)) {
             const result = await win.webContents.executeJavaScript(fs.readFileSync(e2ePath, 'utf8'));
             console.log('E2E_RESULT ' + JSON.stringify(result, null, 1));
+            failed = !result || !!result.error || Object.values(result).some((v) => v === false);
           }
           const img = await win.webContents.capturePage();
           const out = process.argv.find((a) => a.startsWith('--shot='));
@@ -149,9 +151,10 @@ function createWindow() {
           console.log('SELFTEST_OK ' + dest);
         } catch (err) {
           console.error('SELFTEST_FAIL', err);
+          failed = true;
         }
         closing = true;
-        app.quit();
+        app.exit(failed ? 1 : 0); // CI-friendly: failing checks fail the process
       }, 2500);
     });
   }

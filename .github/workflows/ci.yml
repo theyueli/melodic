@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Build & e2e (macOS)
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer bundles
+        run: npm run build
+
+      # launches the app and runs the interaction test suite (e2e.js);
+      # the process exits non-zero if any check fails
+      - name: Run e2e suite
+        run: npx electron . --self-test --shot=selftest.png
+
+      - name: Upload self-test screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selftest-screenshot
+          path: selftest.png
+          if-no-files-found: ignore

@@ -1,10 +1,22 @@
 # Melodic
 
+[![CI](https://github.com/theyueli/melodic/actions/workflows/ci.yml/badge.svg)](https://github.com/theyueli/melodic/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A fast, Typora-style **live-rendering markdown editor** for macOS, built with Electron.
 
 The document is always shown rendered — click into any block and its markdown
 source is revealed *in place* for editing; click away (or press `Esc`) and it
 renders back. No split preview pane.
+
+![Melodic, GitHub theme — the third block is being edited in place](docs/screenshot-light.png)
+
+<details>
+<summary>Night theme</summary>
+
+![Melodic, Night theme](docs/screenshot-night.png)
+
+</details>
 
 ## Run it
 
