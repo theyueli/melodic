@@ -1,19 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#e8eaed"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3e74dd"/>
+      <stop offset="1" stop-color="#7a49df"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
   </defs>
-  <!-- card -->
-  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)" stroke="#c7cbd1" stroke-width="8"/>
-  <!-- beamed eighth notes -->
-  <g fill="#2f3437">
-    <ellipse cx="400" cy="700" rx="92" ry="66" transform="rotate(-16 400 700)"/>
-    <ellipse cx="668" cy="656" rx="92" ry="66" transform="rotate(-16 668 656)"/>
-    <rect x="464" y="330" width="28" height="382"/>
-    <rect x="732" y="286" width="28" height="382"/>
-  </g>
-  <!-- beam in the accent blue -->
-  <path d="M464 322 L760 278 L760 362 L464 406 Z" fill="#4183c4"/>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#sheen)"/>
+  <!-- M whose stems are note stems -->
+  <path d="M 330 650 L 330 348 L 512 552 L 694 348 L 694 650"
+        fill="none" stroke="#ffffff" stroke-width="60" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- note heads under both stems -->
+  <ellipse cx="302" cy="666" rx="66" ry="48" transform="rotate(-20 302 666)" fill="#ffffff"/>
+  <ellipse cx="666" cy="666" rx="66" ry="48" transform="rotate(-20 666 666)" fill="#ffffff"/>
 </svg>

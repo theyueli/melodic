@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.png" width="128" alt="Melodic" /></p>
+
 # Melodic
 
 [![CI](https://github.com/theyueli/melodic/actions/workflows/ci.yml/badge.svg)](https://github.com/theyueli/melodic/actions/workflows/ci.yml)
