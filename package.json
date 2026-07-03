@@ -1,7 +1,7 @@
 {
   "name": "melodic",
   "productName": "Melodic",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Melodic \u2014 a fast, Typora-style live-rendering markdown editor",
   "main": "main.js",
   "type": "commonjs",
