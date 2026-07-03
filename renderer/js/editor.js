@@ -5,6 +5,7 @@ import {
   isMonoKind,
   isMultilineKind,
   scheduleHighlight,
+  scheduleAbc,
   onLibLoaded
 } from './markdown.js';
 import { buildTableGrid } from './table-grid.js';
@@ -56,6 +57,7 @@ export class Editor {
       for (const el of stale) {
         el.innerHTML = renderBlockHtml(this.blocks[Number(el.dataset.i)]);
         scheduleHighlight(el);
+        scheduleAbc(el);
       }
     });
   }
@@ -113,6 +115,7 @@ export class Editor {
     this.container.appendChild(frag);
     this._reindex();
     scheduleHighlight(this.container);
+    scheduleAbc(this.container);
     this._startLazyMaterialize();
     this._changed(false);
   }
@@ -142,6 +145,7 @@ export class Editor {
     el.classList.remove('md-lazy');
     if (this._io) this._io.unobserve(el);
     scheduleHighlight(el);
+    scheduleAbc(el);
   }
 
   _startLazyMaterialize() {
@@ -250,7 +254,10 @@ export class Editor {
     } else {
       this._reindex(start);
     }
-    newEls.forEach((el) => scheduleHighlight(el));
+    newEls.forEach((el) => {
+      scheduleHighlight(el);
+      scheduleAbc(el);
+    });
     this._changed();
   }
 
@@ -1007,6 +1014,11 @@ export class Editor {
       }
       case 'math-block':
         return this._insertBlockAfterCurrent('$$\n\n$$', 3);
+      case 'music-sheet':
+        return this._insertBlockAfterCurrent(
+          '```abc\nX: 1\nT: Untitled\nM: 4/4\nL: 1/8\nK: C\nCDEF GABc | c2 B2 A2 G2 |\n```',
+          15
+        );
       case 'hr':
         return this._insertBlockAfterCurrent('------');
       case 'insert-table':

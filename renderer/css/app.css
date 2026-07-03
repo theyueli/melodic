@@ -478,3 +478,31 @@ table.table-grid td:focus {
 #fn-tooltip.hidden { display: none; }
 #fn-tooltip .md-footnote { padding-left: 0; text-indent: 0; }
 #fn-tooltip .fn-missing { color: var(--control-text-color, #999); }
+
+/* ---------- music sheets (```abc) ---------- */
+
+.abc-sheet {
+  position: relative;
+  padding: 6px 0;
+  color: var(--text-color, #333);
+}
+.abc-sheet svg { max-width: 100%; }
+
+.abc-play {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--window-border-color, rgba(0, 0, 0, 0.15));
+  border-radius: 50%;
+  background: var(--bg-color, #fff);
+  color: #4183c4;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.12);
+}
+.abc-sheet:hover .abc-play { opacity: 1; }
+.abc-play:hover { background: var(--item-active-bg-color, rgba(0, 0, 0, 0.05)); }

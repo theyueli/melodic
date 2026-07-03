@@ -578,6 +578,7 @@ function buildMenu() {
         { type: 'separator' },
         { label: 'Code Fence', accelerator: 'Alt+CmdOrCtrl+C', click: () => send('code-fence') },
         { label: 'Math Block', accelerator: 'Alt+CmdOrCtrl+B', click: () => send('math-block') },
+        { label: 'Music Sheet', accelerator: 'Alt+CmdOrCtrl+M', click: () => send('music-sheet') },
         { label: 'Quote', accelerator: 'Alt+CmdOrCtrl+Q', click: () => send('quote') },
         { type: 'separator' },
         { label: 'Ordered List', accelerator: 'Alt+CmdOrCtrl+O', click: () => send('ordered-list') },

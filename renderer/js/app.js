@@ -1,5 +1,5 @@
 import { Editor } from './editor.js';
-import { setBaseDir, renderBlockHtml, splitBlocks, ensureLibs, highlightAllSync } from './markdown.js';
+import { setBaseDir, renderBlockHtml, splitBlocks, ensureLibs, highlightAllSync, ensureAbcjs, engraveAllSync } from './markdown.js';
 import { FindBar } from './find.js';
 import { installSmartPaste, pastePlain, copyRich, htmlToMarkdown } from './clipboard.js';
 
@@ -281,6 +281,12 @@ async function buildExportHtml() {
   const tpl = document.createElement('template');
   tpl.innerHTML = blocks.map((b) => renderBlockHtml(b)).join('\n');
   highlightAllSync(tpl.content);
+  if (text.includes('```abc')) {
+    try {
+      await ensureAbcjs();
+      engraveAllSync(tpl.content);
+    } catch {}
+  }
   const body = tpl.innerHTML;
   const themeHref = $('#theme-css').getAttribute('href');
   const cssTexts = [];

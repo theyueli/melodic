@@ -79,7 +79,7 @@ let hlQueue = [];
 let hlScheduled = false;
 
 export function scheduleHighlight(root) {
-  const targets = root.querySelectorAll('pre code:not([data-hl])');
+  const targets = root.querySelectorAll('pre code:not([data-hl]):not(.language-abc)');
   if (!targets.length) return;
   for (const el of targets) {
     el.dataset.hl = 'q';
@@ -105,6 +105,155 @@ function drainHighlightQueue() {
     else hlScheduled = false;
   };
   requestIdleCallback(work, { timeout: 200 });
+}
+
+/* ---------------- music sheets (```abc fences) ----------------
+ * Engraving follows the same deferred pattern as syntax highlighting: blocks
+ * render instantly as plain code, then upgrade to engraved SVG in idle time
+ * once abcjs (a lazy 500KB bundle) lands. Documents without music pay zero. */
+
+let abcjsLib = null;
+let abcjsLoading = null;
+const SOUNDFONT_URL = new URL('assets/soundfont/', document.baseURI).href;
+
+export function ensureAbcjs() {
+  if (abcjsLib) return Promise.resolve(abcjsLib);
+  if (!abcjsLoading) {
+    abcjsLoading = injectScript('dist/abcjs.bundle.js').then(
+      () => {
+        abcjsLib = window.__abcjs;
+        drainAbcQueue();
+        libListeners.forEach((cb) => cb('abcjs'));
+        return abcjsLib;
+      },
+      (err) => {
+        abcjsLoading = null; // allow a retry
+        throw err;
+      }
+    );
+  }
+  return abcjsLoading;
+}
+
+let abcQueue = [];
+let abcScheduled = false;
+
+export function scheduleAbc(root) {
+  const targets = root.querySelectorAll('pre code.language-abc:not([data-abc])');
+  if (!targets.length) return;
+  for (const el of targets) {
+    el.dataset.abc = 'q';
+    abcQueue.push(el);
+  }
+  ensureAbcjs().catch(() => {});
+  if (abcjsLib) drainAbcQueue();
+}
+
+function drainAbcQueue() {
+  if (abcScheduled || !abcjsLib || !abcQueue.length) return;
+  abcScheduled = true;
+  const work = (deadline) => {
+    while (abcQueue.length && deadline.timeRemaining() > 5) {
+      const el = abcQueue.pop();
+      if (!el.isConnected || el.dataset.abc === 'done') continue;
+      engraveAbc(el, true);
+      el.dataset.abc = 'done';
+    }
+    if (abcQueue.length) requestIdleCallback(work, { timeout: 300 });
+    else abcScheduled = false;
+  };
+  requestIdleCallback(work, { timeout: 300 });
+}
+
+function engraveAbc(codeEl, interactive) {
+  const pre = codeEl.closest('pre');
+  if (!pre) return;
+  const src = codeEl.textContent.replace(/\n$/, '');
+  const wrap = document.createElement('div');
+  wrap.className = 'abc-sheet';
+  const mount = document.createElement('div');
+  wrap.appendChild(mount);
+  try {
+    const visual = abcjsLib.renderAbc(mount, src, {
+      responsive: 'resize',
+      staffwidth: 680,
+      paddingtop: 0,
+      paddingbottom: 4
+    })[0];
+    pre.replaceWith(wrap);
+    if (interactive && visual && abcjsLib.synth && abcjsLib.synth.supportsAudio()) {
+      const btn = document.createElement('button');
+      btn.className = 'abc-play';
+      btn.textContent = '▶';
+      btn.title = 'Play';
+      wrap.appendChild(btn);
+      wireAbcPlayback(btn, visual);
+    }
+  } catch {
+    // unparseable notation stays as a plain code block
+  }
+}
+
+/* one tune plays at a time */
+let abcSynth = null;
+let abcPlayingBtn = null;
+let abcAudioCtx = null;
+
+function stopAbcPlayback() {
+  if (abcSynth) {
+    try { abcSynth.stop(); } catch {}
+  }
+  if (abcPlayingBtn) {
+    abcPlayingBtn.textContent = '▶';
+    abcPlayingBtn.title = 'Play';
+  }
+  abcSynth = null;
+  abcPlayingBtn = null;
+}
+
+function wireAbcPlayback(btn, visual) {
+  btn.addEventListener('click', async (e) => {
+    e.stopPropagation(); // never activate the block for editing
+    e.preventDefault();
+    if (abcPlayingBtn === btn) {
+      stopAbcPlayback();
+      return;
+    }
+    stopAbcPlayback();
+    btn.textContent = '…';
+    try {
+      abcAudioCtx = abcAudioCtx || new AudioContext();
+      if (abcAudioCtx.state === 'suspended') await abcAudioCtx.resume();
+      const synth = new abcjsLib.synth.CreateSynth();
+      await synth.init({
+        visualObj: visual,
+        audioContext: abcAudioCtx,
+        options: {
+          soundFontUrl: SOUNDFONT_URL,
+          onEnded: () => {
+            if (abcSynth === synth) stopAbcPlayback();
+          }
+        }
+      });
+      await synth.prime();
+      abcSynth = synth;
+      abcPlayingBtn = btn;
+      btn.textContent = '◼';
+      btn.title = 'Stop';
+      synth.start();
+    } catch (err) {
+      btn.textContent = '▶';
+      btn.title = 'Playback unavailable';
+    }
+  });
+  // block-activation guard for the mousedown path too
+  btn.addEventListener('mousedown', (e) => e.stopPropagation());
+}
+
+/** Synchronously engrave all ```abc blocks under a detached root (export). */
+export function engraveAllSync(root) {
+  if (!abcjsLib) return;
+  root.querySelectorAll('pre code.language-abc').forEach((el) => engraveAbc(el, false));
 }
 
 /** Synchronously highlight everything under a detached root (used by export). */

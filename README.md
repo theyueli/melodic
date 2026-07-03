@@ -50,6 +50,8 @@ drag it into `/Applications`. It registers as an editor for `.md` files, so
   with syntax highlighting, task lists with clickable checkboxes, images,
   links (⌘-click to open), YAML front matter, setext headings
 - **Math** — inline `$…$` and block `$$…$$` via KaTeX
+- **Sheet music** — ` ```abc ` fences engrave to real scores (abcjs) with
+  one-click playback; click a sheet to edit its notation (⌥⌘M inserts one)
 - `==highlight==`, **bold**, *italic*, ~~strike~~, `code`, underline
 - **Sidebar** (⇧⌘L) with **Files** (open a folder) and **Outline** tabs
 - **Source mode** (⌘/) — edit the whole document as raw markdown

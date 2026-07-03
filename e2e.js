@@ -227,6 +227,20 @@
       results.spellcheckToggle = onByDefault && off;
       key(taS, 'Escape');
     }
+
+    // 17. music sheets: ```abc fence engraves to SVG with a play button
+    {
+      const ed = window.__editor;
+      ed.setText('# Music\n\n```abc\nX: 1\nT: Scale\nM: 4/4\nL: 1/8\nK: C\nCDEF GABc|\n```');
+      await sleep(100);
+      let sheet = null;
+      for (let i = 0; i < 60 && !sheet; i++) {
+        await sleep(100);
+        sheet = write.querySelector('.abc-sheet svg');
+      }
+      const play = write.querySelector('.abc-play');
+      results.musicSheet = !!sheet && !!play;
+    }
   } catch (err) {
     results.error = String(err && err.stack ? err.stack : err);
   }
