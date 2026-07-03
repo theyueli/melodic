@@ -33,6 +33,8 @@ export class Editor {
     this._lastEditAt = 0;
     this._suppressBlurCommit = false;
 
+    this.spellcheck = opts.spellcheck !== false;
+
     this._io = null;
     this._lazyQueue = null;
     this._lazyPtr = 0;
@@ -332,7 +334,9 @@ export class Editor {
     const ta = document.createElement('textarea');
     ta.className = 'block-source' + (isMonoKind(kind) ? ' mono' : '');
     ta.value = source;
-    ta.spellcheck = false;
+    // spellcheck only ever runs on this one small textarea — the rendered
+    // document is never checked, so huge docs pay nothing
+    ta.spellcheck = this.spellcheck && !isMonoKind(kind);
     ta.rows = 1;
 
     el.classList.add('md-editing');
@@ -405,6 +409,11 @@ export class Editor {
         }
       }, 0);
     });
+  }
+
+  setSpellcheck(on) {
+    this.spellcheck = !!on;
+    if (this.active && this.active.ta) this.active.ta.spellcheck = this.spellcheck;
   }
 
   _setCaret(ta, caret) {

@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld('api', {
   closeNow: () => ipcRenderer.send('app:closeNow'),
   rendererReady: () => ipcRenderer.send('app:rendererReady'),
   openExternal: (url) => ipcRenderer.send('shell:openExternal', url),
+  newWindow: () => ipcRenderer.send('window:new'),
+  windowCount: () => ipcRenderer.invoke('window:count'),
   onMenu: (cb) => ipcRenderer.on('menu', (e, action, arg) => cb(action, arg)),
   onOpenPath: (cb) => ipcRenderer.on('open-path', (e, p) => cb(p))
 });

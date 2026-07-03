@@ -185,6 +185,48 @@
       results.smartPaste = ta.value.includes('Hello **bold** and *em*');
       key(ta, 'Escape');
     }
+
+    // 14. footnotes: ref + def render, hover shows preview tooltip
+    {
+      const ed = window.__editor;
+      ed.setText('Text with a footnote[^note] here.\n\n[^note]: The **definition** body.');
+      await sleep(80);
+      const ref = write.querySelector('.fn-ref');
+      const def = write.querySelector('.md-footnote');
+      ref.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      await sleep(50);
+      const tip = document.querySelector('#fn-tooltip');
+      const tipShown = tip && !tip.classList.contains('hidden') && tip.innerHTML.includes('<strong>definition</strong>');
+      results.footnotes = !!ref && !!def && tipShown;
+      tip.classList.add('hidden');
+    }
+
+    // 15. multiple windows via IPC
+    {
+      const before = await window.api.windowCount();
+      window.api.newWindow();
+      let after = before;
+      for (let i = 0; i < 30 && after !== before + 1; i++) {
+        await sleep(100);
+        after = await window.api.windowCount();
+      }
+      results.multiWindow = before >= 1 && after === before + 1;
+    }
+
+    // 16. spellcheck: on by default in prose textareas, toggleable
+    {
+      const ed = window.__editor;
+      ed.setText('spellcheck test paragraph');
+      await sleep(50);
+      ed.activate(0, 0);
+      const taS = write.querySelector('textarea.block-source');
+      const onByDefault = taS.spellcheck === true;
+      ed.setSpellcheck(false);
+      const off = taS.spellcheck === false;
+      ed.setSpellcheck(true);
+      results.spellcheckToggle = onByDefault && off;
+      key(taS, 'Escape');
+    }
   } catch (err) {
     results.error = String(err && err.stack ? err.stack : err);
   }

@@ -21,8 +21,10 @@ let folder = null; // { root, name, tree }
 const editor = new Editor(writeEl, {
   onChange: onDocChange,
   openExternal: (url) => window.api.openExternal(url),
-  onNavigateAnchor: (anchor) => editor.scrollToHeadingText(anchor)
+  onNavigateAnchor: (anchor) => editor.scrollToHeadingText(anchor),
+  spellcheck: (window.api.config || {}).spellcheck !== false
 });
+sourceTA.spellcheck = (window.api.config || {}).spellcheck !== false;
 if (window.api.dev) window.__editor = editor; // test harness hook, dev builds only
 
 const findBar = new FindBar(editor, $('#content'), { onDidChangeDoc: () => onDocChange() });
@@ -136,6 +138,71 @@ function updateWordCount() {
   }
   wordCountEl.textContent = `${total} ${total === 1 ? 'word' : 'words'}`;
 }
+
+/* ---------------- footnotes: hover preview + click-to-jump ---------------- */
+
+const fnTip = document.createElement('div');
+fnTip.id = 'fn-tooltip';
+fnTip.className = 'hidden';
+$('#content').appendChild(fnTip);
+let fnHideTimer = 0;
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function findFootnoteDef(id) {
+  const re = new RegExp('^\\s{0,3}\\[\\^' + escapeRegExp(id) + '\\]:');
+  return editor.blocks.findIndex((b) => re.test(b));
+}
+
+function showFnTip(refEl) {
+  clearTimeout(fnHideTimer);
+  const id = refEl.dataset.fn;
+  const idx = findFootnoteDef(id);
+  fnTip.innerHTML = idx === -1
+    ? '<em class="fn-missing">No footnote definition for [^' + id + ']</em>'
+    : renderBlockHtml(editor.blocks[idx]);
+  fnTip.classList.remove('hidden');
+  const contentRect = $('#content').getBoundingClientRect();
+  const r = refEl.getBoundingClientRect();
+  const top = r.bottom - contentRect.top + 6;
+  const left = Math.min(r.left - contentRect.left, contentRect.width - 380);
+  fnTip.style.top = top + 'px';
+  fnTip.style.left = Math.max(8, left) + 'px';
+}
+
+function hideFnTipSoon() {
+  clearTimeout(fnHideTimer);
+  fnHideTimer = setTimeout(() => fnTip.classList.add('hidden'), 200);
+}
+
+writeEl.addEventListener('mouseover', (e) => {
+  const ref = e.target.closest('.fn-ref');
+  if (ref) showFnTip(ref);
+});
+writeEl.addEventListener('mouseout', (e) => {
+  if (e.target.closest('.fn-ref')) hideFnTipSoon();
+});
+fnTip.addEventListener('mouseenter', () => clearTimeout(fnHideTimer));
+fnTip.addEventListener('mouseleave', hideFnTipSoon);
+
+// capture-phase so the editor's block-activation click never fires for refs
+writeEl.addEventListener(
+  'click',
+  (e) => {
+    const ref = e.target.closest('.fn-ref');
+    if (!ref) return;
+    const idx = findFootnoteDef(ref.dataset.fn);
+    if (idx !== -1) {
+      e.preventDefault();
+      e.stopPropagation();
+      fnTip.classList.add('hidden');
+      editor.scrollToBlock(idx);
+    }
+  },
+  true
+);
 
 /* ---------------- document lifecycle ---------------- */
 
@@ -507,6 +574,10 @@ window.api.onMenu(async (action, arg) => {
       return findBar.visible ? findBar.next() : undefined;
     case 'find-prev':
       return findBar.visible ? findBar.prev() : undefined;
+    case 'spellcheck':
+      editor.setSpellcheck(arg);
+      sourceTA.spellcheck = !!arg;
+      return;
     default:
       if (!sourceMode) editor.applyAction(action, arg);
   }

@@ -1,12 +1,11 @@
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
-let win = null;
-let isDirty = false;
-let pendingOpenPath = null;   // file passed before window/renderer was ready
-let rendererReady = false;
-let closing = false;
+/* per-window state: win.id -> { isDirty, closing, ready, pendingPath, filePath } */
+const winState = new Map();
+let firstWin = null;          // the dev harness (self-test/bench) attaches here
+let pendingStartupPath = null; // open-file arriving before app ready
 
 // the test/benchmark harness exists only in dev — packaged builds expose
 // nothing beyond the user-facing app
@@ -20,20 +19,18 @@ if (DEV) {
   app.setPath('userData', path.join(app.getPath('appData'), 'Melodic-dev'));
 }
 
-// single instance: a second launch focuses the window and opens its file here
+// single instance: a second launch focuses the app and opens its file here
 if (app.isPackaged && !app.requestSingleInstanceLock()) {
   app.quit();
 }
 app.on('second-instance', (e, argv) => {
-  if (win) {
-    if (win.isMinimized()) win.restore();
-    win.focus();
+  const focused = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+  if (focused) {
+    if (focused.isMinimized()) focused.restore();
+    focused.focus();
   }
   const f = fileArgFromArgv(argv);
-  if (!f) return;
-  // queue like the macOS open-file path: the window or renderer may not be up yet
-  if (win && rendererReady) win.webContents.send('open-path', f);
-  else pendingOpenPath = f;
+  if (f) openPathInBestWindow(f);
 });
 
 function fileArgFromArgv(argv) {
@@ -55,9 +52,30 @@ function writeConfig(patch) {
   } catch {}
 }
 
-function createWindow() {
+const senderWin = (e) => BrowserWindow.fromWebContents(e.sender);
+const stateOf = (win) => (win ? winState.get(win.id) : undefined);
+
+/**
+ * Route a file to the focused window when it is empty and clean;
+ * otherwise open a fresh window for it (Typora-style).
+ */
+function openPathInBestWindow(p) {
+  const focused = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+  const st = stateOf(focused);
+  if (focused && st && st.ready && !st.isDirty && !st.filePath) {
+    focused.webContents.send('open-path', p);
+    focused.focus();
+  } else if (focused && st && !st.ready && !st.pendingPath) {
+    // window still booting — queue the file there instead of opening another
+    st.pendingPath = p;
+  } else {
+    createWindow(p);
+  }
+}
+
+function createWindow(openPath = null) {
   const cfg = readConfig();
-  win = new BrowserWindow({
+  const win = new BrowserWindow({
     width: 1080,
     height: 780,
     minWidth: 480,
@@ -70,7 +88,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      spellcheck: false,
+      spellcheck: true, // native macOS checker; applies only to editable fields
       v8CacheOptions: 'bypassHeatCheck',
       // settings ride into the renderer synchronously — startup never touches
       // localStorage (whose LevelDB lock can stall seconds if another instance
@@ -82,11 +100,26 @@ function createWindow() {
     }
   });
 
+  winState.set(win.id, {
+    isDirty: false,
+    closing: false,
+    ready: false,
+    pendingPath: openPath,
+    filePath: null
+  });
+
+  // offset additional windows so they don't stack exactly
+  if (firstWin && !firstWin.isDestroyed()) {
+    const [x, y] = win.getPosition();
+    win.setPosition(x + 28, y + 28);
+  }
+
   win.once('ready-to-show', () => win.show());
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
   win.on('close', (e) => {
-    if (closing || !isDirty) return;
+    const st = stateOf(win);
+    if (!st || st.closing || !st.isDirty) return;
     e.preventDefault();
     const choice = dialog.showMessageBoxSync(win, {
       type: 'warning',
@@ -99,12 +132,52 @@ function createWindow() {
     if (choice === 0) {
       win.webContents.send('menu', 'save-and-close');
     } else if (choice === 1) {
-      closing = true;
+      st.closing = true;
       win.close();
     }
   });
 
-  win.on('closed', () => { win = null; });
+  win.on('closed', () => {
+    winState.delete(win.id);
+    if (firstWin === win) firstWin = null;
+  });
+
+  // spell-check context menu: suggestions, learn/unlearn, standard edit ops
+  win.webContents.on('context-menu', (e, params) => {
+    const items = [];
+    if (params.misspelledWord) {
+      for (const s of params.dictionarySuggestions.slice(0, 5)) {
+        items.push({ label: s, click: () => win.webContents.replaceMisspelling(s) });
+      }
+      if (!params.dictionarySuggestions.length) {
+        items.push({ label: 'No Guesses Found', enabled: false });
+      }
+      items.push({ type: 'separator' });
+      items.push({
+        label: 'Learn Spelling',
+        click: () =>
+          win.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord)
+      });
+      items.push({ type: 'separator' });
+    }
+    if (params.isEditable) {
+      items.push({ role: 'cut' }, { role: 'copy' }, { role: 'paste' });
+    } else if (params.selectionText.trim()) {
+      items.push({ role: 'copy' });
+    }
+    if (items.length) Menu.buildFromTemplate(items).popup({ window: win });
+  });
+
+  if (!firstWin) {
+    firstWin = win;
+    attachDevHarness(win);
+  }
+  return win;
+}
+
+/* self-test / bench harness (dev only, first window only) */
+function attachDevHarness(win) {
+  const st = () => stateOf(win);
 
   if (BENCH_ARG) {
     win.webContents.on('console-message', (e) => {
@@ -124,7 +197,7 @@ function createWindow() {
         } catch (err) {
           console.error('BENCH_FAIL', err);
         }
-        closing = true;
+        if (st()) st().closing = true;
         app.quit();
       }, 600);
     });
@@ -153,7 +226,6 @@ function createWindow() {
           console.error('SELFTEST_FAIL', err);
           failed = true;
         }
-        closing = true;
         app.exit(failed ? 1 : 0); // CI-friendly: failing checks fail the process
       }, 2500);
     });
@@ -188,8 +260,8 @@ function readTree(dir, depth = 0) {
 
 /* ---------------- IPC ---------------- */
 
-ipcMain.handle('dialog:openFile', async () => {
-  const res = await dialog.showOpenDialog(win, {
+ipcMain.handle('dialog:openFile', async (e) => {
+  const res = await dialog.showOpenDialog(senderWin(e), {
     properties: ['openFile'],
     filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'mdown', 'mkd', 'txt'] }]
   });
@@ -197,8 +269,8 @@ ipcMain.handle('dialog:openFile', async () => {
   return res.filePaths[0];
 });
 
-ipcMain.handle('dialog:openFolder', async () => {
-  const res = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
+ipcMain.handle('dialog:openFolder', async (e) => {
+  const res = await dialog.showOpenDialog(senderWin(e), { properties: ['openDirectory'] });
   if (res.canceled || !res.filePaths.length) return null;
   const root = res.filePaths[0];
   return { root, name: path.basename(root), tree: readTree(root) };
@@ -220,7 +292,7 @@ ipcMain.handle('file:read', (e, filePath) => {
 ipcMain.handle('file:save', async (e, { filePath, content, saveAs }) => {
   let target = filePath;
   if (!target || saveAs) {
-    const res = await dialog.showSaveDialog(win, {
+    const res = await dialog.showSaveDialog(senderWin(e), {
       defaultPath: target || 'Untitled.md',
       filters: [{ name: 'Markdown', extensions: ['md'] }]
     });
@@ -237,7 +309,7 @@ ipcMain.handle('file:save', async (e, { filePath, content, saveAs }) => {
 });
 
 ipcMain.handle('export:html', async (e, { defaultName, html }) => {
-  const res = await dialog.showSaveDialog(win, {
+  const res = await dialog.showSaveDialog(senderWin(e), {
     defaultPath: (defaultName || 'Untitled') + '.html',
     filters: [{ name: 'HTML', extensions: ['html'] }]
   });
@@ -283,7 +355,7 @@ async function renderHiddenExport(html) {
 ipcMain.handle('export:pdf', async (e, { defaultName, html, path: explicitPath }) => {
   let target = explicitPath;
   if (!target) {
-    const res = await dialog.showSaveDialog(win, {
+    const res = await dialog.showSaveDialog(senderWin(e), {
       defaultPath: (defaultName || 'Untitled') + '.pdf',
       filters: [{ name: 'PDF', extensions: ['pdf'] }]
     });
@@ -325,8 +397,10 @@ ipcMain.handle('print:html', async (e, { html }) => {
   }
 });
 
-ipcMain.handle('app:confirmDiscard', () => {
-  if (!isDirty) return true;
+ipcMain.handle('app:confirmDiscard', (e) => {
+  const win = senderWin(e);
+  const st = stateOf(win);
+  if (!st || !st.isDirty) return true;
   const choice = dialog.showMessageBoxSync(win, {
     type: 'warning',
     buttons: ['Discard Changes', 'Cancel'],
@@ -339,12 +413,18 @@ ipcMain.handle('app:confirmDiscard', () => {
 });
 
 ipcMain.on('app:setDirty', (e, dirty) => {
-  isDirty = !!dirty;
-  if (win) win.setDocumentEdited(isDirty);
+  const win = senderWin(e);
+  const st = stateOf(win);
+  if (!st) return;
+  st.isDirty = !!dirty;
+  win.setDocumentEdited(st.isDirty);
 });
 
 ipcMain.on('app:setFile', (e, filePath) => {
-  if (!win) return;
+  const win = senderWin(e);
+  const st = stateOf(win);
+  if (!win || !st) return;
+  st.filePath = filePath || null;
   if (filePath) {
     win.setRepresentedFilename(filePath);
     win.setTitle(path.basename(filePath));
@@ -355,8 +435,10 @@ ipcMain.on('app:setFile', (e, filePath) => {
   }
 });
 
-ipcMain.on('app:closeNow', () => {
-  closing = true;
+ipcMain.on('app:closeNow', (e) => {
+  const win = senderWin(e);
+  const st = stateOf(win);
+  if (st) st.closing = true;
   if (win) win.close();
 });
 
@@ -372,11 +454,26 @@ ipcMain.on('app:saveConfig', (e, patch) => {
   if (Object.keys(clean).length) writeConfig(clean);
 });
 
-ipcMain.on('app:rendererReady', () => {
-  rendererReady = true;
-  const initial = pendingOpenPath || fileArgFromArgv(process.argv);
+ipcMain.on('app:rendererReady', (e) => {
+  const win = senderWin(e);
+  const st = stateOf(win);
+  if (!st) return;
+  st.ready = true;
+  const initial =
+    st.pendingPath ||
+    (win === firstWin ? pendingStartupPath || fileArgFromArgv(process.argv) : null);
   if (initial) win.webContents.send('open-path', initial);
-  pendingOpenPath = null;
+  st.pendingPath = null;
+  if (win === firstWin) pendingStartupPath = null;
+});
+
+ipcMain.on('window:new', () => {
+  createWindow();
+});
+
+ipcMain.handle('window:count', () => {
+  if (!DEV) return -1; // dev harness only
+  return BrowserWindow.getAllWindows().length;
 });
 
 ipcMain.on('shell:openExternal', (e, url) => {
@@ -386,11 +483,17 @@ ipcMain.on('shell:openExternal', (e, url) => {
 /* ---------------- menu ---------------- */
 
 function send(action, arg) {
+  const win = BrowserWindow.getFocusedWindow() || firstWin;
   if (win) win.webContents.send('menu', action, arg);
+}
+
+function broadcast(action, arg) {
+  for (const w of BrowserWindow.getAllWindows()) w.webContents.send('menu', action, arg);
 }
 
 function buildMenu() {
   const isMac = process.platform === 'darwin';
+  const cfg = readConfig();
   const template = [
     ...(isMac
       ? [{
@@ -412,6 +515,7 @@ function buildMenu() {
       label: 'File',
       submenu: [
         { label: 'New', accelerator: 'CmdOrCtrl+N', click: () => send('new') },
+        { label: 'New Window', accelerator: 'Shift+CmdOrCtrl+N', click: () => createWindow() },
         { type: 'separator' },
         { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => send('open') },
         { label: 'Open Folder…', accelerator: 'CmdOrCtrl+Shift+O', click: () => send('open-folder') },
@@ -444,6 +548,17 @@ function buildMenu() {
         { label: 'Find and Replace…', accelerator: 'Alt+CmdOrCtrl+F', click: () => send('find-replace') },
         { label: 'Find Next', accelerator: 'CmdOrCtrl+G', click: () => send('find-next') },
         { label: 'Find Previous', accelerator: 'Shift+CmdOrCtrl+G', click: () => send('find-prev') },
+        { type: 'separator' },
+        {
+          label: 'Check Spelling While Typing',
+          type: 'checkbox',
+          checked: cfg.spellcheck !== false,
+          click: (item) => {
+            writeConfig({ spellcheck: item.checked });
+            session.defaultSession.spellCheckerEnabled = item.checked;
+            broadcast('spellcheck', item.checked);
+          }
+        },
         { type: 'separator' },
         { label: 'Copy as Markdown', click: () => send('copy-markdown') },
         { label: 'Copy as Rich Text', click: () => send('copy-rich') }
@@ -527,11 +642,13 @@ function buildMenu() {
 
 app.on('open-file', (e, filePath) => {
   e.preventDefault();
-  if (win && rendererReady) win.webContents.send('open-path', filePath);
-  else pendingOpenPath = filePath;
+  if (app.isReady()) openPathInBestWindow(filePath);
+  else pendingStartupPath = filePath;
 });
 
 app.whenReady().then(() => {
+  const cfg = readConfig();
+  session.defaultSession.spellCheckerEnabled = cfg.spellcheck !== false;
   buildMenu();
   createWindow();
   app.on('activate', () => {
@@ -540,5 +657,6 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  app.quit();
+  // macOS convention: the app stays alive without windows
+  if (process.platform !== 'darwin' || SELF_TEST || BENCH_ARG) app.quit();
 });

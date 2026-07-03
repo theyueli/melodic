@@ -174,6 +174,55 @@ const blockMath = {
   }
 };
 
+/* Footnotes: [^id] references and "[^id]: definition" blocks. Each renders
+ * self-contained (the label is the id, not a global number), so blocks stay
+ * independently cacheable — no cross-block state, no render-cache invalidation. */
+const footnoteRef = {
+  name: 'footnoteRef',
+  level: 'inline',
+  start(src) {
+    const i = src.indexOf('[^');
+    return i === -1 ? undefined : i;
+  },
+  tokenizer(src) {
+    const match = src.match(/^\[\^([^\]\s]{1,40})\](?!:)/);
+    if (match) {
+      return { type: 'footnoteRef', raw: match[0], text: match[1] };
+    }
+  },
+  renderer(token) {
+    const id = escapeHtml(token.text);
+    return `<sup class="fn-ref" data-fn="${id}" title="Click to jump to the footnote">${id}</sup>`;
+  }
+};
+
+const footnoteDef = {
+  name: 'footnoteDef',
+  level: 'block',
+  start(src) {
+    const m = src.match(/(^|\n)\s{0,3}\[\^/);
+    return m ? m.index : undefined;
+  },
+  tokenizer(src) {
+    const match = src.match(/^\s{0,3}\[\^([^\]\s]{1,40})\]:[ \t]*([\s\S]*?)(?:\n(?=\s{0,3}\[\^)|$)/);
+    if (match) {
+      // continuation lines are dedented and joined
+      const text = match[2].replace(/\n\s+/g, ' ').trim();
+      return {
+        type: 'footnoteDef',
+        raw: match[0],
+        id: match[1],
+        text,
+        tokens: this.lexer.inlineTokens(text)
+      };
+    }
+  },
+  renderer(token) {
+    const id = escapeHtml(token.id);
+    return `<div class="md-footnote" data-fn="${id}"><span class="fn-label">${id}.</span> ${this.parser.parseInline(token.tokens)}</div>`;
+  }
+};
+
 const markHighlight = {
   name: 'markHighlight',
   level: 'inline',
@@ -198,7 +247,7 @@ const markHighlight = {
 };
 
 const marked = new Marked({ gfm: true, breaks: false });
-marked.use({ extensions: [inlineMath, blockMath, markHighlight] });
+marked.use({ extensions: [inlineMath, blockMath, markHighlight, footnoteRef, footnoteDef] });
 
 export function escapeHtml(s) {
   return s
@@ -407,6 +456,16 @@ export function splitBlocks(text) {
         let end = i;
         let j = i + 1;
         while (j < n && !isBlank(lines[j])) { end = j; j++; }
+        blocks.push(lines.slice(i, end + 1).join('\n'));
+        i = end + 1;
+        continue;
+      }
+
+      // footnote definition (with indented continuation lines)
+      if (/^\s{0,3}\[\^[^\]\s]+\]:/.test(line)) {
+        let end = i;
+        let j = i + 1;
+        while (j < n && /^\s{2,}\S/.test(lines[j])) { end = j; j++; }
         blocks.push(lines.slice(i, end + 1).join('\n'));
         i = end + 1;
         continue;

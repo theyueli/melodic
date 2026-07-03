@@ -436,3 +436,45 @@ table.table-grid th:focus,
 table.table-grid td:focus {
   box-shadow: inset 0 0 0 2px #4183c4;
 }
+
+/* ---------- footnotes ---------- */
+
+.fn-ref {
+  color: #4183c4;
+  cursor: pointer;
+  font-size: 0.75em;
+  padding: 0 1px;
+  user-select: none;
+}
+.fn-ref::before { content: "["; }
+.fn-ref::after { content: "]"; }
+.fn-ref:hover { text-decoration: underline; }
+
+.md-footnote {
+  font-size: 0.88em;
+  color: var(--control-text-color, #777);
+  padding-left: 1.2em;
+  text-indent: -1.2em;
+}
+.md-footnote .fn-label {
+  color: #4183c4;
+  font-weight: 600;
+  margin-right: 0.35em;
+}
+
+#fn-tooltip {
+  position: absolute;
+  z-index: 60;
+  max-width: 380px;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  background: var(--bg-color, #fff);
+  color: var(--text-color, #333);
+  border: 1px solid var(--window-border-color, rgba(0, 0, 0, 0.15));
+  border-radius: 8px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.16);
+}
+#fn-tooltip.hidden { display: none; }
+#fn-tooltip .md-footnote { padding-left: 0; text-indent: 0; }
+#fn-tooltip .fn-missing { color: var(--control-text-color, #999); }
