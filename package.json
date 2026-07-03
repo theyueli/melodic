@@ -1,0 +1,27 @@
+{
+  "name": "melodic",
+  "productName": "Melodic",
+  "version": "1.0.0",
+  "description": "Melodic \u2014 a fast, Typora-style live-rendering markdown editor",
+  "main": "main.js",
+  "type": "commonjs",
+  "scripts": {
+    "build": "esbuild renderer/js/app.js --bundle --minify --format=iife --outfile=renderer/dist/app.bundle.js && esbuild renderer/js/katex-entry.js --bundle --minify --format=iife --outfile=renderer/dist/katex.bundle.js && esbuild renderer/js/hljs-entry.js --bundle --minify --format=iife --outfile=renderer/dist/hljs.bundle.js",
+    "prestart": "npm run build",
+    "start": "electron .",
+    "selftest": "npm run build && electron . --self-test",
+    "pack": "npm run build && electron-packager . Melodic --platform=darwin --arch=arm64 --out=dist-app --overwrite --icon=build/icon.icns --app-bundle-id=com.local.melodic --extend-info=build/info.plist && npm run sign",
+    "sign": "codesign --force --deep --sign - dist-app/Melodic-darwin-arm64/Melodic.app && codesign --verify --deep --strict dist-app/Melodic-darwin-arm64/Melodic.app && echo 'signature OK'"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "highlight.js": "^11.11.1",
+    "katex": "^0.17.0",
+    "marked": "^18.0.5"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.0.1",
+    "electron": "^43.0.0",
+    "esbuild": "^0.28.1"
+  }
+}

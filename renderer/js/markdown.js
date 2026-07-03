@@ -1,0 +1,482 @@
+import { Marked } from 'marked';
+
+/* ---------------- lazy libraries ----------------
+ * KaTeX and highlight.js together are ~2/3 of the bundle. They are built as
+ * separate bundles and injected only when the document actually needs them.
+ * Until then math renders as a subtle source placeholder and code renders
+ * unhighlighted; both are upgraded in place the moment the library lands.
+ */
+
+let katex = null;
+let hljs = null;
+let katexLoading = null;
+let hljsLoading = null;
+const libListeners = [];
+
+function injectScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+export function ensureKatex() {
+  if (katex) return Promise.resolve(katex);
+  if (!katexLoading) {
+    katexLoading = injectScript('dist/katex.bundle.js').then(
+      () => {
+        katex = window.__katex;
+        clearRenderCache(); // cached math placeholders are stale now
+        libListeners.forEach((cb) => cb('katex'));
+        return katex;
+      },
+      (err) => {
+        katexLoading = null; // allow a retry on the next render
+        throw err;
+      }
+    );
+  }
+  return katexLoading;
+}
+
+export function ensureHljs() {
+  if (hljs) return Promise.resolve(hljs);
+  if (!hljsLoading) {
+    hljsLoading = injectScript('dist/hljs.bundle.js').then(
+      () => {
+        hljs = window.__hljs;
+        drainHighlightQueue();
+        libListeners.forEach((cb) => cb('hljs'));
+        return hljs;
+      },
+      (err) => {
+        hljsLoading = null; // allow a retry on the next render
+        throw err;
+      }
+    );
+  }
+  return hljsLoading;
+}
+
+export function ensureLibs() {
+  return Promise.all([ensureKatex(), ensureHljs()]);
+}
+
+/** cb(name) fires when a lazy library finishes loading ('katex' | 'hljs'). */
+export function onLibLoaded(cb) {
+  libListeners.push(cb);
+}
+
+/* ---------------- deferred syntax highlighting ----------------
+ * Highlighting is never done during render — blocks appear instantly with
+ * plain <pre><code>, then get highlighted in idle time once hljs is loaded.
+ */
+
+let hlQueue = [];
+let hlScheduled = false;
+
+export function scheduleHighlight(root) {
+  const targets = root.querySelectorAll('pre code:not([data-hl])');
+  if (!targets.length) return;
+  for (const el of targets) {
+    el.dataset.hl = 'q';
+    hlQueue.push(el);
+  }
+  ensureHljs().catch(() => {});
+  if (hljs) drainHighlightQueue();
+}
+
+function drainHighlightQueue() {
+  if (hlScheduled || !hljs || !hlQueue.length) return;
+  hlScheduled = true;
+  const work = (deadline) => {
+    while (hlQueue.length && deadline.timeRemaining() > 3) {
+      const el = hlQueue.pop();
+      if (!el.isConnected || el.dataset.hl === 'done') continue;
+      try {
+        hljs.highlightElement(el);
+      } catch {}
+      el.dataset.hl = 'done';
+    }
+    if (hlQueue.length) requestIdleCallback(work, { timeout: 200 });
+    else hlScheduled = false;
+  };
+  requestIdleCallback(work, { timeout: 200 });
+}
+
+/** Synchronously highlight everything under a detached root (used by export). */
+export function highlightAllSync(root) {
+  if (!hljs) return;
+  root.querySelectorAll('pre code').forEach((el) => {
+    try {
+      hljs.highlightElement(el);
+    } catch {}
+  });
+}
+
+/* ---------------- marked setup ---------------- */
+
+const inlineMath = {
+  name: 'inlineMath',
+  level: 'inline',
+  start(src) {
+    const i = src.indexOf('$');
+    return i === -1 ? undefined : i;
+  },
+  tokenizer(src) {
+    const match = src.match(/^\$([^$\n]+?)\$(?!\d)/);
+    if (match && match[1].trim()) {
+      return { type: 'inlineMath', raw: match[0], text: match[1] };
+    }
+  },
+  renderer(token) {
+    if (!katex) {
+      ensureKatex().catch(() => {});
+      return `<span class="math-pending">${escapeHtml(token.raw)}</span>`;
+    }
+    try {
+      return katex.renderToString(token.text, { throwOnError: false });
+    } catch {
+      return escapeHtml(token.raw);
+    }
+  }
+};
+
+const blockMath = {
+  name: 'blockMath',
+  level: 'block',
+  start(src) {
+    const m = src.match(/(^|\n)\s{0,3}\$\$/);
+    return m ? m.index : undefined;
+  },
+  tokenizer(src) {
+    const match = src.match(/^\s{0,3}\$\$([\s\S]+?)\$\$\s*(?:\n+|$)/);
+    if (match) {
+      return { type: 'blockMath', raw: match[0], text: match[1] };
+    }
+  },
+  renderer(token) {
+    if (!katex) {
+      ensureKatex().catch(() => {});
+      return `<pre class="math-pending">${escapeHtml(token.raw)}</pre>`;
+    }
+    try {
+      return `<div class="math-block">${katex.renderToString(token.text, {
+        displayMode: true,
+        throwOnError: false
+      })}</div>`;
+    } catch {
+      return `<pre>${escapeHtml(token.raw)}</pre>`;
+    }
+  }
+};
+
+const markHighlight = {
+  name: 'markHighlight',
+  level: 'inline',
+  start(src) {
+    const i = src.indexOf('==');
+    return i === -1 ? undefined : i;
+  },
+  tokenizer(src) {
+    const match = src.match(/^==([^=\n]+?)==/);
+    if (match) {
+      return {
+        type: 'markHighlight',
+        raw: match[0],
+        text: match[1],
+        tokens: this.lexer.inlineTokens(match[1])
+      };
+    }
+  },
+  renderer(token) {
+    return `<mark>${this.parser.parseInline(token.tokens)}</mark>`;
+  }
+};
+
+const marked = new Marked({ gfm: true, breaks: false });
+marked.use({ extensions: [inlineMath, blockMath, markHighlight] });
+
+export function escapeHtml(s) {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/* ---------------- rendering ---------------- */
+
+let currentFileDir = null;
+export function setBaseDir(dir) {
+  if (dir !== currentFileDir) clearRenderCache(); // image paths are baked into cached html
+  currentFileDir = dir;
+}
+
+function resolveSrc(src) {
+  if (!src || /^(https?:|data:|file:|\/)/i.test(src)) return src;
+  if (!currentFileDir) return src;
+  return 'file://' + currentFileDir.replace(/\/$/, '') + '/' + src;
+}
+
+/* LRU cache: block source -> rendered html. Re-renders (undo, source-mode
+ * toggle, lib upgrades, repeated content) become near-free. */
+const renderCache = new Map();
+const RENDER_CACHE_MAX = 4000;
+
+function clearRenderCache() {
+  renderCache.clear();
+}
+
+const sharedTpl = document.createElement('template');
+
+/**
+ * Render one markdown block to an HTML string (no syntax highlighting here —
+ * that happens lazily in idle time via scheduleHighlight).
+ */
+export function renderBlockHtml(source) {
+  if (!source.trim()) {
+    return '<p class="md-empty"><br/></p>';
+  }
+  const hit = renderCache.get(source);
+  if (hit !== undefined) {
+    // refresh LRU position
+    renderCache.delete(source);
+    renderCache.set(source, hit);
+    return hit;
+  }
+
+  let html;
+  try {
+    html = marked.parse(source);
+  } catch (err) {
+    html = `<pre>${escapeHtml(source)}</pre>`;
+  }
+
+  // post-process only when the html needs it — template parsing is not free
+  if (html.includes('<pre') || html.includes('<img') || html.includes('checkbox')) {
+    sharedTpl.innerHTML = html;
+    const content = sharedTpl.content;
+
+    content.querySelectorAll('pre').forEach((el) => el.classList.add('md-fences'));
+
+    content.querySelectorAll('img').forEach((img) => {
+      img.setAttribute('src', resolveSrc(img.getAttribute('src')));
+      img.setAttribute('loading', 'lazy');
+      img.setAttribute('decoding', 'async');
+    });
+
+    let cbIndex = 0;
+    content.querySelectorAll('li input[type="checkbox"]').forEach((cb) => {
+      cb.removeAttribute('disabled');
+      cb.dataset.cbIndex = String(cbIndex++);
+      cb.closest('li').classList.add('task-list-item');
+    });
+
+    html = sharedTpl.innerHTML;
+  }
+
+  renderCache.set(source, html);
+  if (renderCache.size > RENDER_CACHE_MAX) {
+    renderCache.delete(renderCache.keys().next().value);
+  }
+  return html;
+}
+
+/* ---------------- block splitting ---------------- */
+
+const LIST_RE = /^\s{0,3}(?:[-+*]|\d{1,9}[.)])\s/;
+const FENCE_RE = /^(\s{0,3})(`{3,}|~{3,})/;
+const HEADING_RE = /^\s{0,3}#{1,6}(\s|$)/;
+const HR_RE = /^\s{0,3}([-*_])(\s*\1){2,}\s*$/;
+const QUOTE_RE = /^\s{0,3}>/;
+const TABLE_DELIM_RE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+
+const isBlank = (l) => l.length === 0 || /^\s*$/.test(l);
+
+function startsNewBlock(line) {
+  // fast path: a line starting with a letter or CJK char can never start a
+  // special block, and that is the overwhelmingly common case
+  const c = line.charCodeAt(0);
+  if ((c >= 97 && c <= 122) || (c >= 65 && c <= 90) || c > 0x2fff) return false;
+  return (
+    HEADING_RE.test(line) ||
+    FENCE_RE.test(line) ||
+    QUOTE_RE.test(line) ||
+    HR_RE.test(line) ||
+    /^\s{0,3}[-+*]\s/.test(line) ||
+    /^\s{0,3}\d{1,9}[.)]\s/.test(line) ||
+    /^\s{0,3}\$\$/.test(line)
+  );
+}
+
+/**
+ * Split a markdown document into an array of block source strings.
+ * Blocks joined with "\n\n" reproduce an equivalent document.
+ */
+export function splitBlocks(text) {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const blocks = [];
+  const n = lines.length;
+  let i = 0;
+
+  // YAML front matter
+  if (lines[0] === '---') {
+    let j = 1;
+    while (j < n && !/^(---|\.\.\.)\s*$/.test(lines[j])) j++;
+    if (j < n) {
+      blocks.push(lines.slice(0, j + 1).join('\n'));
+      i = j + 1;
+    }
+  }
+
+  while (i < n) {
+    if (isBlank(lines[i])) { i++; continue; }
+    const line = lines[i];
+    const c0 = line.charCodeAt(0);
+    // fast path for plain-prose lines (letters / CJK): they can only start a
+    // paragraph, so skip all the special-block matching below
+    const isProse = (c0 >= 97 && c0 <= 122) || (c0 >= 65 && c0 <= 90) || c0 > 0x2fff;
+
+    if (!isProse) {
+      // fenced code
+      const fence = line.match(FENCE_RE);
+      if (fence) {
+        const ch = fence[2][0];
+        const len = fence[2].length;
+        const closeRe = new RegExp('^\\s{0,3}\\' + ch + '{' + len + ',}\\s*$');
+        let j = i + 1;
+        while (j < n && !closeRe.test(lines[j])) j++;
+        const end = j < n ? j : n - 1;
+        blocks.push(lines.slice(i, end + 1).join('\n'));
+        i = end + 1;
+        continue;
+      }
+
+      // math block
+      if (/^\s{0,3}\$\$/.test(line)) {
+        const rest = line.trim().slice(2);
+        if (rest.includes('$$')) {
+          blocks.push(line);
+          i++;
+          continue;
+        }
+        let j = i + 1;
+        while (j < n && !/\$\$\s*$/.test(lines[j])) j++;
+        const end = j < n ? j : n - 1;
+        blocks.push(lines.slice(i, end + 1).join('\n'));
+        i = end + 1;
+        continue;
+      }
+
+      // heading / hr: single-line blocks
+      if (HEADING_RE.test(line) || HR_RE.test(line)) {
+        blocks.push(line);
+        i++;
+        continue;
+      }
+
+      // list (keeps loose-list blank lines inside one block)
+      if (LIST_RE.test(line)) {
+        let end = i;
+        let j = i + 1;
+        while (j < n) {
+          if (!isBlank(lines[j])) {
+            if (FENCE_RE.test(lines[j]) && !/^\s{2,}/.test(lines[j])) break;
+            end = j;
+            j++;
+            continue;
+          }
+          let k = j;
+          while (k < n && isBlank(lines[k])) k++;
+          if (k < n && (LIST_RE.test(lines[k]) || /^\s{2,}\S/.test(lines[k]))) {
+            end = k;
+            j = k + 1;
+          } else break;
+        }
+        blocks.push(lines.slice(i, end + 1).join('\n'));
+        i = end + 1;
+        continue;
+      }
+
+      // blockquote (with lazy continuation)
+      if (QUOTE_RE.test(line)) {
+        let end = i;
+        let j = i + 1;
+        while (j < n && !isBlank(lines[j])) { end = j; j++; }
+        blocks.push(lines.slice(i, end + 1).join('\n'));
+        i = end + 1;
+        continue;
+      }
+
+      // HTML block
+      if (/^\s{0,3}<[a-zA-Z!/]/.test(line)) {
+        let end = i;
+        let j = i + 1;
+        while (j < n && !isBlank(lines[j])) { end = j; j++; }
+        blocks.push(lines.slice(i, end + 1).join('\n'));
+        i = end + 1;
+        continue;
+      }
+    }
+
+    // table (a prose line can be a table header, so this stays outside the gate)
+    if (i + 1 < n && line.includes('|') && lines[i + 1].includes('-') && TABLE_DELIM_RE.test(lines[i + 1])) {
+      let end = i + 1;
+      let j = i + 2;
+      while (j < n && lines[j].includes('|') && !isBlank(lines[j])) { end = j; j++; }
+      blocks.push(lines.slice(i, end + 1).join('\n'));
+      i = end + 1;
+      continue;
+    }
+
+    // paragraph: until blank line or an interrupting block start
+    {
+      let end = i;
+      let j = i + 1;
+      while (j < n && !isBlank(lines[j])) {
+        // setext underline (H1 '=' or H2 '-') terminates and joins the
+        // paragraph — checked before startsNewBlock, which would otherwise
+        // misread a '---' underline as a horizontal rule
+        if (/^\s{0,3}(=+|-+)\s*$/.test(lines[j])) { end = j; j++; break; }
+        if (startsNewBlock(lines[j])) break;
+        end = j;
+        j++;
+      }
+      blocks.push(lines.slice(i, end + 1).join('\n'));
+      i = end + 1;
+      continue;
+    }
+  }
+
+  if (blocks.length === 0) blocks.push('');
+  return blocks;
+}
+
+/* ---------------- block type helpers ---------------- */
+
+export function blockKind(source) {
+  const first = source.split('\n', 1)[0];
+  if (FENCE_RE.test(first)) return 'fence';
+  if (source.startsWith('---') && /\n---\s*$|\n\.\.\.\s*$/.test(source)) return 'meta';
+  if (/^\s{0,3}\$\$/.test(first)) return 'math';
+  if (HEADING_RE.test(first)) return 'heading';
+  if (LIST_RE.test(first)) return 'list';
+  if (QUOTE_RE.test(first)) return 'quote';
+  if (source.includes('\n') && TABLE_DELIM_RE.test(source.split('\n')[1] || '')) return 'table';
+  if (HR_RE.test(first)) return 'hr';
+  return 'paragraph';
+}
+
+/** Blocks whose textarea should use a monospace font. */
+export function isMonoKind(kind) {
+  return kind === 'fence' || kind === 'meta' || kind === 'math' || kind === 'table';
+}
+
+/** Blocks where Enter should insert a newline rather than split the block. */
+export function isMultilineKind(kind) {
+  return kind === 'fence' || kind === 'meta' || kind === 'math' || kind === 'table' || kind === 'list' || kind === 'quote';
+}

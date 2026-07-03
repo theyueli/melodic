@@ -1,0 +1,9 @@
+node_modules/
+dist-app/
+renderer/dist/
+selftest.png
+build/icon.iconset/
+build/icon.svg.png
+.DS_Store
+*.log
+.claude/

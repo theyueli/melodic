@@ -1,0 +1,151 @@
+/* GitHub theme — adapted from Typora's github.css */
+
+:root {
+  --bg-color: #ffffff;
+  --side-bar-bg-color: #fafafa;
+  --text-color: rgb(51, 51, 51);
+  --control-text-color: #777;
+  --window-border-color: rgba(0, 0, 0, 0.08);
+  --item-active-bg-color: rgba(0, 0, 0, 0.06);
+  --active-file-bg-color: #e6e6e6;
+  --active-file-text-color: #333;
+  --code-block-bg-color: #f8f8f8;
+  --code-block-border-color: #e7eaed;
+  --md-source-bg: rgba(140, 160, 200, 0.055);
+  --heading-border-color: #eee;
+  --blockquote-border-color: #dfe2e5;
+  --table-border-color: #dfe2e5;
+  --table-alt-bg-color: #f8f8f8;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: "Open Sans", "Clear Sans", "Helvetica Neue", Helvetica, Arial,
+    "Segoe UI Emoji", "SF Pro", sans-serif;
+  color: var(--text-color);
+  line-height: 1.6;
+  background: var(--bg-color);
+}
+
+#write {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 48px 30px 100px 30px;
+}
+
+@media only screen and (min-width: 1400px) {
+  #write { max-width: 1024px; }
+}
+
+#write a {
+  color: #4183c4;
+  text-decoration: none;
+}
+#write a:hover { text-decoration: underline; }
+
+#write h1, #write h2, #write h3, #write h4, #write h5, #write h6 {
+  position: relative;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  font-weight: bold;
+  line-height: 1.4;
+  cursor: text;
+}
+#write h1 { font-size: 2.25em; line-height: 1.2; border-bottom: 1px solid var(--heading-border-color); }
+#write h2 { font-size: 1.75em; line-height: 1.225; border-bottom: 1px solid var(--heading-border-color); }
+#write h3 { font-size: 1.5em; line-height: 1.43; }
+#write h4 { font-size: 1.25em; }
+#write h5 { font-size: 1em; }
+#write h6 { font-size: 1em; color: #777; }
+
+#write p, #write blockquote, #write ul, #write ol, #write dl, #write table {
+  margin: 0.8em 0;
+}
+#write li > ol, #write li > ul { margin: 0 0; }
+
+#write hr {
+  height: 2px;
+  padding: 0;
+  margin: 16px 0;
+  background-color: #e7e7e7;
+  border: 0 none;
+  overflow: hidden;
+  box-sizing: content-box;
+}
+
+#write ul, #write ol { padding-left: 30px; }
+
+#write blockquote {
+  border-left: 4px solid var(--blockquote-border-color);
+  padding: 0 15px;
+  color: #777777;
+}
+
+#write table {
+  padding: 0;
+  word-break: initial;
+  border-collapse: collapse;
+}
+#write table tr {
+  border: 1px solid var(--table-border-color);
+  margin: 0;
+  padding: 0;
+}
+#write table tr:nth-child(2n),
+#write thead {
+  background-color: var(--table-alt-bg-color);
+}
+#write table th {
+  font-weight: bold;
+  border: 1px solid var(--table-border-color);
+  margin: 0;
+  padding: 6px 13px;
+}
+#write table td {
+  border: 1px solid var(--table-border-color);
+  margin: 0;
+  padding: 6px 13px;
+}
+
+#write pre.md-fences,
+#write pre {
+  border: 1px solid var(--code-block-border-color);
+  background-color: var(--code-block-bg-color);
+  border-radius: 3px;
+  padding: 8px 12px 6px 12px;
+  font-size: 0.9em;
+  margin-bottom: 15px;
+  margin-top: 15px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  line-height: 1.6;
+}
+
+#write code, #write tt {
+  border: 1px solid var(--code-block-border-color);
+  background-color: #f3f4f4;
+  border-radius: 3px;
+  padding: 2px 4px 0px 4px;
+  font-size: 0.9em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+#write pre code {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 1em;
+}
+
+#write mark {
+  background: #fff8c5;
+  color: inherit;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+
+#write ::selection {
+  background: #b5d6fc;
+}

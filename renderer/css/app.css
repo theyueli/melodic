@@ -1,0 +1,314 @@
+/* ---------- app chrome (theme-independent structure) ---------- */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+#drag-strip {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 36px;
+  -webkit-app-region: drag;
+  z-index: 50;
+  pointer-events: auto;
+}
+
+#layout {
+  display: flex;
+  height: 100vh;
+}
+
+/* ---------- sidebar ---------- */
+
+#sidebar {
+  position: relative;
+  width: 260px;
+  min-width: 180px;
+  max-width: 480px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--side-bar-bg-color, #fafafa);
+  border-right: 1px solid var(--window-border-color, rgba(0,0,0,0.08));
+  user-select: none;
+}
+#sidebar.hidden { display: none; }
+
+.sidebar-header {
+  padding: 44px 12px 6px 12px;
+  -webkit-app-region: drag;
+}
+
+.sidebar-tabs {
+  display: flex;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.sidebar-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 5px 0;
+  font-size: 12px;
+  color: var(--control-text-color, #777);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.sidebar-tab.active {
+  background: var(--item-active-bg-color, rgba(0,0,0,0.07));
+  color: var(--text-color, #333);
+  font-weight: 600;
+}
+
+.sidebar-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 4px 20px 4px;
+}
+
+.sidebar-empty {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--control-text-color, #999);
+}
+.sidebar-empty button {
+  font-family: inherit;
+  font-size: 12.5px;
+  padding: 5px 14px;
+  border-radius: 5px;
+  border: 1px solid var(--window-border-color, #ccc);
+  background: transparent;
+  color: var(--control-text-color, #666);
+  cursor: pointer;
+}
+.sidebar-empty button:hover { background: var(--item-active-bg-color, rgba(0,0,0,0.05)); }
+
+/* file tree */
+.tree-node { font-size: 13px; }
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: default;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-color, #333);
+}
+.tree-row:hover { background: var(--item-active-bg-color, rgba(0,0,0,0.05)); }
+.tree-row.active {
+  background: var(--active-file-bg-color, #e0e0e0);
+  color: var(--active-file-text-color, #333);
+}
+.tree-row .twisty {
+  width: 10px;
+  font-size: 9px;
+  color: var(--control-text-color, #999);
+  flex: 0 0 auto;
+  transition: transform 0.12s;
+}
+.tree-node.collapsed > .tree-children { display: none; }
+.tree-node.collapsed > .tree-row .twisty { transform: rotate(-90deg); }
+.tree-children { padding-left: 14px; }
+.tree-row .file-icon { opacity: 0.55; font-size: 11px; flex: 0 0 auto; }
+.folder-root-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--control-text-color, #999);
+  padding: 6px 10px 4px;
+}
+
+/* outline */
+.outline-item {
+  display: block;
+  padding: 3px 10px;
+  font-size: 12.5px;
+  color: var(--text-color, #444);
+  border-radius: 4px;
+  cursor: default;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.outline-item:hover { background: var(--item-active-bg-color, rgba(0,0,0,0.05)); }
+.outline-h1 { padding-left: 10px; font-weight: 600; }
+.outline-h2 { padding-left: 22px; }
+.outline-h3 { padding-left: 34px; }
+.outline-h4 { padding-left: 46px; }
+.outline-h5 { padding-left: 58px; }
+.outline-h6 { padding-left: 70px; }
+
+#sidebar-resizer {
+  position: absolute;
+  top: 0; right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 60;
+  -webkit-app-region: no-drag;
+}
+
+/* ---------- content ---------- */
+
+#content {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-color, #fff);
+}
+
+#editor-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+#source-editor {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 48px 48px 100px 48px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 14px;
+  line-height: 1.7;
+  background: var(--bg-color, #fff);
+  color: var(--text-color, #333);
+  z-index: 10;
+}
+#source-editor.hidden { display: none; }
+
+#footer {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  padding: 4px 14px;
+  font-size: 11px;
+  color: var(--control-text-color, #999);
+  background: transparent;
+  z-index: 20;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* ---------- live editor blocks ---------- */
+
+#write {
+  outline: none;
+  cursor: text;
+  min-height: calc(100vh - 120px);
+}
+
+.md-block {
+  position: relative;
+  /* layout containment prevents margin collapsing, so use half margins on
+   * each block to keep the original 0.8em rhythm between blocks */
+  margin: 0.4em 0;
+  contain: layout;
+}
+
+/* virtualized phase: skip layout/paint for offscreen blocks while a large
+ * document loads; the editor releases this class in idle time afterwards so
+ * steady-state scrolling is native-fast */
+.md-block.md-cv {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 40px;
+}
+#write > .md-block:last-child { margin-bottom: 0; }
+
+/* #write prefix so these outrank the theme's `#write h1 { margin … }` rules —
+ * with layout containment inner margins no longer collapse away */
+#write .md-block > :first-child { margin-top: 0; }
+#write .md-block > :last-child { margin-bottom: 0; }
+#write > .md-block:first-child { margin-top: 0; }
+
+.md-block.md-editing {
+  content-visibility: visible;
+}
+
+.math-pending {
+  color: var(--control-text-color, #999);
+  opacity: 0.75;
+}
+pre.math-pending {
+  border: none !important;
+  background: transparent !important;
+  text-align: center;
+}
+
+textarea.block-source {
+  display: block;
+  width: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+  /* native auto-growing textarea: typing never forces a JS-driven relayout */
+  field-sizing: content;
+  min-height: 1.6em;
+  background: var(--md-source-bg, rgba(140, 160, 200, 0.055));
+  border-radius: 3px;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+}
+
+textarea.block-source.mono {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  line-height: 1.6;
+  background: var(--code-block-bg-color, #f8f8f8);
+  border: 1px solid var(--code-block-border-color, #e7eaed);
+  padding: 8px 12px 6px 12px;
+}
+
+.md-empty-hint {
+  color: var(--control-text-color, #bbb);
+  pointer-events: none;
+}
+
+/* checkbox task items are interactive */
+.md-block li.task-list-item { list-style-type: none; }
+.md-block li.task-list-item > input[type="checkbox"] {
+  margin-left: -1.3em;
+  margin-right: 0.35em;
+  cursor: pointer;
+}
+
+.math-block { text-align: center; padding: 0.4em 0; overflow-x: auto; }
+
+.md-block img { max-width: 100%; }
+
+.md-block .hljs { background: transparent; padding: 0; }
+
+.md-block pre {
+  overflow-x: auto;
+}
+
+/* flash target for outline navigation */
+@keyframes md-flash {
+  from { background: rgba(120, 160, 255, 0.18); }
+  to { background: transparent; }
+}
+.md-block.flash { animation: md-flash 0.9s ease-out; }
