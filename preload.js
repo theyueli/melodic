@@ -11,7 +11,6 @@ contextBridge.exposeInMainWorld('api', {
   dev: process.argv.includes('--t2dev'),
   saveConfig: (patch) => ipcRenderer.send('app:saveConfig', patch),
   getPathForFile: (file) => webUtils.getPathForFile(file),
-  openFileDialog: () => ipcRenderer.invoke('dialog:openFile'),
   openFolderDialog: () => ipcRenderer.invoke('dialog:openFolder'),
   refreshFolder: (root) => ipcRenderer.invoke('folder:refresh', root),
   readFile: (p) => ipcRenderer.invoke('file:read', p),

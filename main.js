@@ -273,22 +273,49 @@ function readTree(dir, depth = 0) {
 
 /* ---------------- IPC ---------------- */
 
-ipcMain.handle('dialog:openFile', async (e) => {
-  const res = await dialog.showOpenDialog(senderWin(e), {
+const OPEN_FILTERS = [
+  { name: 'All Supported', extensions: ['md', 'markdown', 'mdown', 'mkd', 'txt', 'log'] },
+  { name: 'Markdown', extensions: ['md', 'markdown', 'mdown', 'mkd'] },
+  { name: 'Text and Logs', extensions: ['txt', 'log'] },
+  { name: 'All Files', extensions: ['*'] }
+];
+
+/* Where the open panel starts. An explicit defaultPath matters for speed:
+ * without one, macOS restores its last panel location — often the
+ * Spotlight/iCloud-backed "Recents" view, which can take seconds to
+ * populate. A concrete local directory renders immediately. */
+function defaultOpenDir(win) {
+  const st = stateOf(win);
+  if (st && st.filePath) return path.dirname(st.filePath);
+  const last = readConfig().lastOpenDir;
+  if (last && fs.existsSync(last)) return last;
+  return app.getPath('documents');
+}
+
+/* Open… runs entirely in the main process: the menu click shows the panel
+ * immediately (no renderer round-trip that stalls when the renderer is busy),
+ * standalone rather than as a window sheet (no slide-down animation), and the
+ * chosen path is pushed to the window, whose open flow still confirms
+ * unsaved changes. */
+async function openFileFromMenu() {
+  const win = BrowserWindow.getFocusedWindow() || firstWin;
+  const res = await dialog.showOpenDialog({
     properties: ['openFile'],
-    filters: [
-      { name: 'All Supported', extensions: ['md', 'markdown', 'mdown', 'mkd', 'txt', 'log'] },
-      { name: 'Markdown', extensions: ['md', 'markdown', 'mdown', 'mkd'] },
-      { name: 'Text and Logs', extensions: ['txt', 'log'] },
-      { name: 'All Files', extensions: ['*'] }
-    ]
+    defaultPath: defaultOpenDir(win),
+    filters: OPEN_FILTERS
   });
-  if (res.canceled || !res.filePaths.length) return null;
-  return res.filePaths[0];
-});
+  if (res.canceled || !res.filePaths.length) return;
+  const p = res.filePaths[0];
+  writeConfig({ lastOpenDir: path.dirname(p) });
+  if (win && !win.isDestroyed()) win.webContents.send('open-path', p);
+  else openPathInBestWindow(p);
+}
 
 ipcMain.handle('dialog:openFolder', async (e) => {
-  const res = await dialog.showOpenDialog(senderWin(e), { properties: ['openDirectory'] });
+  const res = await dialog.showOpenDialog(senderWin(e), {
+    properties: ['openDirectory'],
+    defaultPath: defaultOpenDir(senderWin(e))
+  });
   if (res.canceled || !res.filePaths.length) return null;
   const root = res.filePaths[0];
   return { root, name: path.basename(root), tree: readTree(root) };
@@ -623,7 +650,7 @@ function buildMenu() {
         { label: 'New', accelerator: 'CmdOrCtrl+N', click: () => send('new') },
         { label: 'New Window', accelerator: 'Shift+CmdOrCtrl+N', click: () => createWindow() },
         { type: 'separator' },
-        { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => send('open') },
+        { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => openFileFromMenu() },
         { label: 'Open Folder…', accelerator: 'CmdOrCtrl+Shift+O', click: () => send('open-folder') },
         { role: 'recentDocuments', submenu: [{ role: 'clearRecentDocuments' }] },
         { type: 'separator' },

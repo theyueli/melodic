@@ -316,11 +316,6 @@ async function newDocument() {
   loadDocument('', null);
 }
 
-async function openDialog() {
-  const p = await window.api.openFileDialog();
-  if (p) await openPath(p);
-}
-
 async function save(saveAs = false, thenClose = false) {
   if (sourceMode) syncFromSource();
   const content = editor.getText();
@@ -618,7 +613,6 @@ function setTheme(name) {
 window.api.onMenu(async (action, arg) => {
   switch (action) {
     case 'new': return newDocument();
-    case 'open': return openDialog();
     case 'open-folder': return openFolderDialog();
     case 'save': return save(false);
     case 'save-as': return save(true);
