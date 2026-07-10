@@ -241,6 +241,54 @@
       const play = write.querySelector('.abc-play');
       results.musicSheet = !!sheet && !!play;
     }
+
+    // 18. plain-text mode: byte-exact round trip, no markdown, ANSI + level tint
+    {
+      const ed = window.__editor;
+      const doc = window.__doc;
+      const raw =
+        '# not a heading\n' +
+        '2026-07-10 12:00:01 INFO  starting up\n' +
+        '2026-07-10 12:00:02 \x1b[31mERROR\x1b[0m something failed\n' +
+        '2026-07-10 12:00:03 WARNING disk almost full\n' +
+        '   indented   with   spaces\t\ttabs\n' +   // whitespace must survive
+        '\n' +
+        'trailing blank line above; no trailing newline here';
+      const tmp = '/tmp/melodic-e2e-tail.log';
+      doc.markClean();
+      await window.api.saveFile({ filePath: tmp, content: raw });
+      await doc.openPath(tmp);
+      await sleep(120);
+      const pre = write.querySelector('pre.plain-chunk');
+      const noMarkdown = !!pre && !write.querySelector('h1') && pre.textContent.includes('# not a heading');
+      const roundTrip = doc.isPlain() && ed.getText() === raw;
+      const ansi = !!write.querySelector('.ansi-31');
+      const tinted = !!write.querySelector('.pl-line.log-err') && !!write.querySelector('.pl-line.log-warn');
+      results.plainMode = noMarkdown && roundTrip && ansi && tinted;
+    }
+
+    // 19. tail-follow: appended bytes stream in; truncation reloads
+    {
+      const ed = window.__editor;
+      const doc = window.__doc;
+      const tmp = '/tmp/melodic-e2e-tail.log';
+      const wasFollowing = doc.isFollowing(); // .log opens with follow on
+      const appended = '\n2026-07-10 12:00:04 INFO  appended line';
+      await window.api.saveFile({ filePath: tmp, content: ed.getText() + appended });
+      let grew = false;
+      for (let i = 0; i < 40 && !grew; i++) {
+        await sleep(100);
+        grew = ed.getText().endsWith(appended);
+      }
+      const shorter = 'fresh after rotation\n';
+      await window.api.saveFile({ filePath: tmp, content: shorter });
+      let reloaded = false;
+      for (let i = 0; i < 40 && !reloaded; i++) {
+        await sleep(100);
+        reloaded = ed.getText() === shorter;
+      }
+      results.tailFollow = wasFollowing && grew && reloaded;
+    }
   } catch (err) {
     results.error = String(err && err.stack ? err.stack : err);
   }

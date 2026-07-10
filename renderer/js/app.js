@@ -1,5 +1,5 @@
 import { Editor } from './editor.js';
-import { setBaseDir, renderBlockHtml, splitBlocks, ensureLibs, highlightAllSync, ensureAbcjs, engraveAllSync } from './markdown.js';
+import { setBaseDir, renderBlockHtml, splitBlocks, renderPlainHtml, splitPlainChunks, ensureLibs, highlightAllSync, ensureAbcjs, engraveAllSync } from './markdown.js';
 import { FindBar } from './find.js';
 import { installSmartPaste, pastePlain, copyRich, htmlToMarkdown } from './clipboard.js';
 
@@ -14,7 +14,11 @@ const wordCountEl = $('#word-count');
 let filePath = null;
 let savedText = '';
 let sourceMode = false;
+let plainMode = false;   // verbatim text mode (.log default) — no markdown
+let following = false;   // tail-follow the open file
 let folder = null; // { root, name, tree }
+
+const PLAIN_EXT_RE = /\.log$/i;
 
 /* ---------------- editor ---------------- */
 
@@ -30,6 +34,18 @@ if (window.api.dev) window.__editor = editor; // test harness hook, dev builds o
 const findBar = new FindBar(editor, $('#content'), { onDidChangeDoc: () => onDocChange() });
 if (window.api.dev) window.__find = findBar;
 if (window.api.dev) window.__clip = { htmlToMarkdown };
+if (window.api.dev) {
+  window.__doc = {
+    openPath,
+    setPlainMode,
+    isPlain: () => plainMode,
+    isFollowing: () => following,
+    markClean: () => {
+      savedText = currentText();
+      sendDirty(false);
+    }
+  };
+}
 
 installSmartPaste();
 
@@ -99,10 +115,56 @@ function detectDocLang(text) {
 }
 
 function updateDocLang() {
-  const lang = detectDocLang(currentText());
+  const lang = plainMode ? '' : detectDocLang(currentText());
   if (lang) writeEl.setAttribute('lang', lang);
   else writeEl.removeAttribute('lang');
 }
+
+/* ---------------- plain mode & tail-follow ---------------- */
+
+function setPlainMode(on) {
+  if (on === plainMode) return;
+  plainMode = on;
+  const text = currentText();
+  loadingDoc = true;
+  editor.setText(text, { plain: plainMode });
+  loadingDoc = false;
+  updateDocLang();
+  updateFollow();
+}
+
+function updateFooter() {
+  const base = wordCountEl.dataset.count || '';
+  wordCountEl.textContent = following ? base + '  ·  following' : base;
+}
+
+/** Follow runs only for a saved file in plain mode. */
+function updateFollow() {
+  const want = following && !!filePath && plainMode;
+  if (want) window.api.watchFile(filePath);
+  else window.api.unwatchFile();
+  updateFooter();
+}
+
+window.api.onFileChange(async (msg) => {
+  if (!following || !filePath || !plainMode) return;
+  if (isDirty()) return; // paused while there are unsaved edits
+  const scroller = scrollEl;
+  const nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120;
+  if (msg.reload) {
+    loadingDoc = true;
+    editor.setText(msg.content || '', { plain: true });
+    loadingDoc = false;
+    savedText = editor.getText();
+  } else if (msg.appended) {
+    loadingDoc = true;
+    editor.appendText(msg.appended);
+    loadingDoc = false;
+    savedText = editor.getText();
+  }
+  updateWordCount();
+  if (nearBottom) scroller.scrollTop = scroller.scrollHeight;
+});
 
 /* word count with a per-block cache: only blocks that changed are recounted */
 const wcCache = new Map();
@@ -136,7 +198,8 @@ function updateWordCount() {
       total += c;
     }
   }
-  wordCountEl.textContent = `${total} ${total === 1 ? 'word' : 'words'}`;
+  wordCountEl.dataset.count = `${total} ${total === 1 ? 'word' : 'words'}`;
+  updateFooter();
 }
 
 /* ---------------- footnotes: hover preview + click-to-jump ---------------- */
@@ -208,12 +271,14 @@ writeEl.addEventListener(
 
 function loadDocument(text, path) {
   filePath = path || null;
+  plainMode = !!(filePath && PLAIN_EXT_RE.test(filePath));
   setBaseDir(filePath ? filePath.replace(/\/[^/]*$/, '') : null);
   loadingDoc = true;
   clearTimeout(changeTimer);
   changeTimer = 0;
-  editor.setText(text);
+  editor.setText(text, { plain: plainMode });
   loadingDoc = false;
+  updateFollow();
   // compare against the editor's canonical round-trip, not the raw bytes —
   // otherwise files whose whitespace normalizes (trailing newline, blank-line
   // runs) would read as dirty the moment they open
@@ -238,6 +303,7 @@ async function openPath(p) {
     alert('Could not open file:\n' + res.error);
     return;
   }
+  following = PLAIN_EXT_RE.test(p); // tail .log files by default
   loadDocument(res.content, p);
 }
 
@@ -277,10 +343,13 @@ async function save(saveAs = false, thenClose = false) {
 async function buildExportHtml() {
   await ensureLibs(); // math + syntax highlighting must be live for export
   const text = currentText();
-  const blocks = splitBlocks(text);
   const tpl = document.createElement('template');
-  tpl.innerHTML = blocks.map((b) => renderBlockHtml(b)).join('\n');
-  highlightAllSync(tpl.content);
+  if (plainMode) {
+    tpl.innerHTML = splitPlainChunks(text).map((b) => renderPlainHtml(b)).join('\n');
+  } else {
+    tpl.innerHTML = splitBlocks(text).map((b) => renderBlockHtml(b)).join('\n');
+    highlightAllSync(tpl.content);
+  }
   if (text.includes('```abc')) {
     try {
       await ensureAbcjs();
@@ -583,6 +652,13 @@ window.api.onMenu(async (action, arg) => {
     case 'spellcheck':
       editor.setSpellcheck(arg);
       sourceTA.spellcheck = !!arg;
+      return;
+    case 'plain-mode':
+      if (!sourceMode) setPlainMode(!plainMode);
+      return;
+    case 'toggle-follow':
+      following = !following;
+      updateFollow();
       return;
     default:
       if (!sourceMode) editor.applyAction(action, arg);

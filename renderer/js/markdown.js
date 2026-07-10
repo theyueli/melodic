@@ -484,6 +484,76 @@ export function renderBlockHtml(source) {
   return html;
 }
 
+/* ---------------- plain-text (log) rendering ----------------
+ * Plain mode renders text verbatim — no markdown, no normalization — with
+ * ANSI SGR colors translated to spans and ERROR/WARN lines tinted. */
+
+const ANSI_SGR_RE = /\x1b\[([0-9;]*)m/g;
+const ANSI_OTHER_RE = /\x1b(?:\[[0-9;?]*[A-Za-ln-z]|\][^\x07]*(?:\x07|\x1b\\)|[()][AB012])/g;
+const LOG_ERR_RE = /\b(?:ERROR|FATAL|ERR|PANIC|EXCEPTION|FAILED)\b/i;
+const LOG_WARN_RE = /\bWARN(?:ING)?\b/i;
+
+const SGR_CLASSES = {
+  1: 'ansi-bold',
+  30: 'ansi-30', 31: 'ansi-31', 32: 'ansi-32', 33: 'ansi-33',
+  34: 'ansi-34', 35: 'ansi-35', 36: 'ansi-36', 37: 'ansi-37',
+  90: 'ansi-30', 91: 'ansi-31', 92: 'ansi-32', 93: 'ansi-33',
+  94: 'ansi-34', 95: 'ansi-35', 96: 'ansi-36', 97: 'ansi-37'
+};
+
+function renderPlainLine(line) {
+  const clean = line.replace(ANSI_OTHER_RE, '');
+  let html = '';
+  let last = 0;
+  let open = false;
+  let classes = [];
+  ANSI_SGR_RE.lastIndex = 0;
+  let m;
+  while ((m = ANSI_SGR_RE.exec(clean))) {
+    const text = clean.slice(last, m.index);
+    if (text) html += escapeHtml(text);
+    last = m.index + m[0].length;
+    if (open) { html += '</span>'; open = false; }
+    const codes = (m[1] || '0').split(';').map(Number);
+    for (const code of codes) {
+      if (code === 0 || code === 39) classes = [];
+      else if (SGR_CLASSES[code]) {
+        // a new color replaces the previous color; bold replaces bold
+        const isBold = code === 1;
+        classes = classes.filter((cl) => (cl === 'ansi-bold') !== isBold);
+        classes.push(SGR_CLASSES[code]);
+      }
+    }
+    if (classes.length) { html += `<span class="${classes.join(' ')}">`; open = true; }
+  }
+  const tail = clean.slice(last);
+  if (tail) html += escapeHtml(tail);
+  if (open) html += '</span>';
+
+  const stripped = clean.replace(ANSI_SGR_RE, '');
+  let cls = 'pl-line';
+  if (LOG_ERR_RE.test(stripped)) cls += ' log-err';
+  else if (LOG_WARN_RE.test(stripped)) cls += ' log-warn';
+  return `<span class="${cls}">${html || '&#8203;'}</span>`;
+}
+
+/** Render a chunk of plain text lines verbatim. */
+export function renderPlainHtml(source) {
+  const lines = source.split('\n');
+  return `<pre class="plain-chunk">${lines.map(renderPlainLine).join('\n')}</pre>`;
+}
+
+/** Partition text into fixed line-count chunks that re-join byte-exactly. */
+export function splitPlainChunks(text, linesPerChunk = 40) {
+  const lines = (text || '').split('\n');
+  const chunks = [];
+  for (let i = 0; i < lines.length; i += linesPerChunk) {
+    chunks.push(lines.slice(i, i + linesPerChunk).join('\n'));
+  }
+  if (!chunks.length) chunks.push('');
+  return chunks;
+}
+
 /* ---------------- block splitting ---------------- */
 
 const LIST_RE = /^\s{0,3}(?:[-+*]|\d{1,9}[.)])\s/;

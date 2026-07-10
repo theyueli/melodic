@@ -506,3 +506,54 @@ table.table-grid td:focus {
 }
 .abc-sheet:hover .abc-play { opacity: 1; }
 .abc-play:hover { background: var(--item-active-bg-color, rgba(0, 0, 0, 0.05)); }
+
+/* ---------------- plain-text / log mode ---------------- */
+
+/* chunks must abut seamlessly so a file reads as one continuous text */
+#write.plain-mode { max-width: none; }
+#write.plain-mode .md-block { margin: 0; }
+#write.plain-mode textarea.block-source { font-size: 12.5px; line-height: 1.55; }
+
+#write.plain-mode .plain-chunk,
+.plain-chunk {
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  color: var(--text-color, inherit);
+}
+
+/* ANSI SGR colors (terminal-ish palette, readable on light and dark) */
+.ansi-bold { font-weight: 600; }
+.ansi-30 { color: #57606a; }
+.ansi-31 { color: #cf222e; }
+.ansi-32 { color: #1a7f37; }
+.ansi-33 { color: #9a6700; }
+.ansi-34 { color: #0969da; }
+.ansi-35 { color: #8250df; }
+.ansi-36 { color: #1b7c83; }
+.ansi-37 { color: #6e7781; }
+
+body[data-theme="night"] .ansi-30 { color: #8b949e; }
+body[data-theme="night"] .ansi-31 { color: #ff7b72; }
+body[data-theme="night"] .ansi-32 { color: #3fb950; }
+body[data-theme="night"] .ansi-33 { color: #d29922; }
+body[data-theme="night"] .ansi-34 { color: #58a6ff; }
+body[data-theme="night"] .ansi-35 { color: #bc8cff; }
+body[data-theme="night"] .ansi-36 { color: #39c5cf; }
+body[data-theme="night"] .ansi-37 { color: #b1bac4; }
+
+/* log level tinting: whole line, subtle */
+.pl-line.log-err { background: rgba(207, 34, 46, 0.07); color: #b62324; }
+.pl-line.log-warn { background: rgba(154, 103, 0, 0.07); color: #7d5a00; }
+body[data-theme="night"] .pl-line.log-err { background: rgba(248, 81, 73, 0.1); color: #ff9892; }
+body[data-theme="night"] .pl-line.log-warn { background: rgba(210, 153, 34, 0.09); color: #e3b341; }
+/* explicit ANSI colors on the line win over the level tint */
+.pl-line.log-err .ansi-31, .pl-line.log-warn .ansi-33 { color: inherit; }

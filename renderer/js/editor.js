@@ -1,6 +1,8 @@
 import {
   splitBlocks,
   renderBlockHtml,
+  renderPlainHtml,
+  splitPlainChunks,
   blockKind,
   isMonoKind,
   isMultilineKind,
@@ -49,7 +51,7 @@ export class Editor {
 
     // when KaTeX lands, upgrade the blocks that rendered math placeholders
     onLibLoaded((name) => {
-      if (name !== 'katex') return;
+      if (name !== 'katex' || this.plain) return;
       const stale = new Set();
       this.container
         .querySelectorAll('.md-block:not(.md-editing):not(.md-lazy) .math-pending')
@@ -64,18 +66,38 @@ export class Editor {
 
   /* ---------------- document ---------------- */
 
-  setText(text) {
+  setText(text, opts = {}) {
     this.active = null;
-    this.blocks = splitBlocks(text || '');
+    this.plain = !!opts.plain;
+    this.container.classList.toggle('plain-mode', this.plain);
+    this.blocks = this.plain ? splitPlainChunks(text || '') : splitBlocks(text || '');
     this.undoStack = [];
     this.redoStack = [];
     this.renderAll();
   }
 
+  /** Mode-aware block renderer. */
+  _renderBlock(source) {
+    return this.plain ? renderPlainHtml(source) : renderBlockHtml(source);
+  }
+
+  /**
+   * Append raw text to the end of the document (tail-follow). Byte-exact:
+   * the appended string concatenates onto the current text unchanged.
+   */
+  appendText(text) {
+    if (!this.plain || !text) return;
+    const last = this.blocks.length - 1;
+    const merged = this.blocks[last] + text;
+    const chunks = splitPlainChunks(merged);
+    if (this.active && this.active.index === last) this.commitActive();
+    this._replaceBlocks(last, 1, chunks);
+  }
+
   getText() {
     const parts = this.blocks.slice();
     if (this.active) parts[this.active.index] = this.activeValue();
-    return parts.join('\n\n');
+    return parts.join(this.plain ? '\n' : '\n\n');
   }
 
   /** Source of the block being edited (textarea or table grid). */
@@ -123,7 +145,7 @@ export class Editor {
   _makeBlockEl(source) {
     const div = document.createElement('div');
     div.className = this._cvReleased ? 'md-block' : 'md-block md-cv';
-    div.innerHTML = renderBlockHtml(source);
+    div.innerHTML = this._renderBlock(source);
     return div;
   }
 
@@ -141,7 +163,7 @@ export class Editor {
 
   _materializeEl(el) {
     if (!el.classList.contains('md-lazy')) return;
-    el.innerHTML = renderBlockHtml(this.blocks[Number(el.dataset.i)]);
+    el.innerHTML = this._renderBlock(this.blocks[Number(el.dataset.i)]);
     el.classList.remove('md-lazy');
     if (this._io) this._io.unobserve(el);
     scheduleHighlight(el);
@@ -333,13 +355,13 @@ export class Editor {
     const kind = blockKind(source);
 
     // tables edit visually as a cell grid (MD button falls back to source)
-    if (kind === 'table' && !opts.forceSource) {
+    if (kind === 'table' && !this.plain && !opts.forceSource) {
       this._activateTableGrid(index, el, source, opts.cell);
       return;
     }
 
     const ta = document.createElement('textarea');
-    ta.className = 'block-source' + (isMonoKind(kind) ? ' mono' : '');
+    ta.className = 'block-source' + (this.plain || isMonoKind(kind) ? ' mono' : '');
     ta.value = source;
     // spellcheck only ever runs on this one small textarea — the rendered
     // document is never checked, so huge docs pay nothing
@@ -451,7 +473,9 @@ export class Editor {
     this.active = null;
 
     let sources;
-    if (!value.trim()) {
+    if (this.plain) {
+      sources = splitPlainChunks(value);
+    } else if (!value.trim()) {
       sources = this.blocks.length > 1 ? [] : [''];
     } else {
       sources = splitBlocks(value);
@@ -598,8 +622,8 @@ export class Editor {
 
     if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault();
-      if (e.shiftKey) {
-        this._insertAtCaret(kind === 'paragraph' ? '  \n' : '\n');
+      if (this.plain || e.shiftKey) {
+        this._insertAtCaret(this.plain || kind !== 'paragraph' ? '\n' : '  \n');
         return;
       }
       this._handleEnter(kind, ta, i, val, s, en);
@@ -650,7 +674,9 @@ export class Editor {
 
     if (e.key === 'Tab') {
       e.preventDefault();
-      if (kind === 'list') {
+      if (this.plain) {
+        this._insertAtCaret('\t');
+      } else if (kind === 'list') {
         this._indentLine(!e.shiftKey);
       } else {
         if (!e.shiftKey) this._insertAtCaret('  ');
@@ -775,7 +801,7 @@ export class Editor {
 
   _handleBackspaceAtStart(i, val) {
     if (i === 0) {
-      if (!val.trim() && this.blocks.length > 1) {
+      if (!this.plain && !val.trim() && this.blocks.length > 1) {
         this.pushUndo();
         this.active = null;
         this._replaceBlocks(0, 1, []);
@@ -784,6 +810,14 @@ export class Editor {
       return;
     }
     this.pushUndo();
+    if (this.plain) {
+      // chunks are separated by exactly one '\n' — backspace deletes it
+      const prev = this.blocks[i - 1];
+      this.active = null;
+      this._replaceBlocks(i - 1, 2, splitPlainChunks(prev + val));
+      this.activate(i - 1, prev.length);
+      return;
+    }
     if (!val.trim()) {
       this.active = null;
       this._replaceBlocks(i, 1, []);

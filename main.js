@@ -105,7 +105,11 @@ function createWindow(openPath = null) {
     closing: false,
     ready: false,
     pendingPath: openPath,
-    filePath: null
+    filePath: null,
+    watcher: null,   // fs.watch handle for tail-follow
+    watchPath: null,
+    watchSize: 0,
+    watchTimer: 0
   });
 
   // offset additional windows so they don't stack exactly
@@ -138,6 +142,8 @@ function createWindow(openPath = null) {
   });
 
   win.on('closed', () => {
+    const st = winState.get(win.id);
+    if (st) stopWatch(st);
     winState.delete(win.id);
     if (firstWin === win) firstWin = null;
   });
@@ -234,7 +240,7 @@ function attachDevHarness(win) {
 
 /* ---------------- folder tree ---------------- */
 
-const MD_EXT = /\.(md|markdown|mdown|mkd|txt)$/i;
+const MD_EXT = /\.(md|markdown|mdown|mkd|txt|log)$/i;
 
 function readTree(dir, depth = 0) {
   if (depth > 6) return [];
@@ -263,7 +269,10 @@ function readTree(dir, depth = 0) {
 ipcMain.handle('dialog:openFile', async (e) => {
   const res = await dialog.showOpenDialog(senderWin(e), {
     properties: ['openFile'],
-    filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'mdown', 'mkd', 'txt'] }]
+    filters: [
+      { name: 'Markdown', extensions: ['md', 'markdown', 'mdown', 'mkd'] },
+      { name: 'Text and Logs', extensions: ['txt', 'log'] }
+    ]
   });
   if (res.canceled || !res.filePaths.length) return null;
   return res.filePaths[0];
@@ -288,6 +297,94 @@ ipcMain.handle('file:read', (e, filePath) => {
     return { ok: false, error: String(err.message || err) };
   }
 });
+
+/* ---------------- tail-follow (fs.watch) ----------------
+ * The renderer watches the open .log file; on growth we read only the
+ * appended slice and send it over. Shrinking (rotation/truncation) or a
+ * rename event triggers a full reload instead. Events are debounced ~150ms
+ * so bursty writers cost one read. */
+
+function stopWatch(st) {
+  if (!st) return;
+  clearTimeout(st.watchTimer);
+  st.watchTimer = 0;
+  if (st.watcher) {
+    try { st.watcher.close(); } catch {}
+  }
+  st.watcher = null;
+  st.watchPath = null;
+}
+
+ipcMain.on('file:watch', (e, filePath) => {
+  const win = senderWin(e);
+  const st = stateOf(win);
+  if (!st || !filePath) return;
+  if (st.watchPath === filePath && st.watcher) return;
+  stopWatch(st);
+  let size;
+  try {
+    size = fs.statSync(filePath).size;
+  } catch {
+    return;
+  }
+  st.watchPath = filePath;
+  st.watchSize = size;
+  const check = () => {
+    st.watchTimer = 0;
+    if (!st.watcher || win.isDestroyed()) return;
+    let stat;
+    try {
+      stat = fs.statSync(filePath);
+    } catch {
+      return; // transient (e.g. mid-rotation); next event retries
+    }
+    if (stat.size === st.watchSize) return;
+    if (stat.size < st.watchSize) {
+      // rotation/truncation: send the whole file, read at this instant so the
+      // byte offset stays consistent with what the renderer now holds
+      try {
+        const buf = fs.readFileSync(filePath);
+        st.watchSize = buf.length;
+        win.webContents.send('file:change', { reload: true, content: buf.toString('utf8') });
+      } catch {}
+      return;
+    }
+    let fd;
+    try {
+      fd = fs.openSync(filePath, 'r');
+      const buf = Buffer.alloc(stat.size - st.watchSize);
+      let n = fs.readSync(fd, buf, 0, buf.length, st.watchSize);
+      // don't split a multi-byte UTF-8 sequence across two append events:
+      // hold back a trailing incomplete sequence for the next read
+      for (let k = n - 1; k >= 0 && k >= n - 3; k--) {
+        const b = buf[k];
+        if ((b & 0x80) === 0) break; // ascii tail — complete
+        if ((b & 0xc0) === 0xc0) {   // lead byte: is its sequence complete?
+          const need = b >= 0xf0 ? 4 : b >= 0xe0 ? 3 : 2;
+          if (k + need > n) n = k;
+          break;
+        }
+      }
+      if (n > 0) {
+        st.watchSize += n;
+        win.webContents.send('file:change', { appended: buf.toString('utf8', 0, n) });
+      }
+    } catch {
+      // unreadable right now; leave watchSize so the next event retries
+    } finally {
+      if (fd !== undefined) try { fs.closeSync(fd); } catch {}
+    }
+  };
+  try {
+    st.watcher = fs.watch(filePath, () => {
+      if (!st.watchTimer) st.watchTimer = setTimeout(check, 150);
+    });
+  } catch {
+    stopWatch(st);
+  }
+});
+
+ipcMain.on('file:unwatch', (e) => stopWatch(stateOf(senderWin(e))));
 
 ipcMain.handle('file:save', async (e, { filePath, content, saveAs }) => {
   let target = filePath;
@@ -613,6 +710,8 @@ function buildMenu() {
         { label: 'Files', accelerator: 'Ctrl+Shift+2', click: () => send('sidebar-files') },
         { type: 'separator' },
         { label: 'Source Code Mode', accelerator: 'CmdOrCtrl+/', click: () => send('source-mode') },
+        { label: 'Plain Text Mode', accelerator: 'Shift+CmdOrCtrl+/', click: () => send('plain-mode') },
+        { label: 'Follow File Changes', accelerator: 'Shift+CmdOrCtrl+F', click: () => send('toggle-follow') },
         { type: 'separator' },
         {
           label: 'Theme',

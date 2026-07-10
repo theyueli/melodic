@@ -38,8 +38,8 @@ npm run pack
 ```
 
 produces a signed, double-clickable app at `dist-app/Melodic-darwin-arm64/Melodic.app` —
-drag it into `/Applications`. It registers as an editor for `.md` files, so
-"Open With → Melodic" works from Finder.
+drag it into `/Applications`. It registers as an editor for `.md`
+and `.txt` files and a viewer for `.log`, so "Open With → Melodic" works from Finder.
 
 > Packaging ad-hoc code-signs the bundle (`npm run sign`). This matters: with
 > unsigned packager output, macOS Gatekeeper refuses to open downloaded
@@ -73,6 +73,9 @@ drag it into `/Applications`. It registers as an editor for `.md` files, so
   and columns, set column alignment, Tab between cells
 - **Smart clipboard** — pasting rich text/HTML converts to markdown; ⇧⌘V pastes
   plain; *Copy as Rich Text* pastes formatted into Word/Gmail
+- **Plain text & logs** — `.log` files open verbatim (no markdown), with ANSI
+  terminal colors, ERROR/WARN line tinting, and live tail-follow that streams
+  appended lines like `tail -f`; toggle any file with View → Plain Text Mode
 - **Export to HTML and PDF**, and native printing (⌘P)
 - Word count, undo/redo, drag-and-drop to open, unsaved-changes protection
 
@@ -89,6 +92,7 @@ Melodic is engineered to stay instant on documents that choke other editors
   a document actually uses math or code, then upgrade blocks in place
 - rendered blocks are LRU-cached; scrolling is native-speed after an idle-time
   layout warmup (`content-visibility` virtualization is progressively released)
+- a 5.7MB / 60,000-line ANSI-colored log opens in **~95ms** in plain-text mode
 
 ## Key bindings (macOS)
 
@@ -97,6 +101,8 @@ Melodic is engineered to stay instant on documents that choke other editors
 | ⌘N / ⌘O / ⇧⌘O | New / Open file / Open folder |
 | ⌘S / ⇧⌘S | Save / Save As |
 | ⌘/ | Toggle source mode |
+| ⇧⌘/ | Toggle plain text mode |
+| ⇧⌘F | Follow file changes (tail) |
 | ⌘P | Print |
 | ⌘F / ⌥⌘F | Find / Find & Replace |
 | ⇧⌘N | New window |
