@@ -75,7 +75,9 @@ and `.txt` files and a viewer for `.log`, so "Open With → Melodic" works from 
   plain; *Copy as Rich Text* pastes formatted into Word/Gmail
 - **Plain text & logs** — `.log` files open verbatim (no markdown), with ANSI
   terminal colors, ERROR/WARN line tinting, and live tail-follow that streams
-  appended lines like `tail -f`; toggle any file with View → Plain Text Mode
+  appended lines like `tail -f`; toggle any file with View → Plain Text Mode.
+  Open… accepts any file — unrecognized extensions render verbatim, so saving
+  can never reformat a file Melodic doesn't understand
 - **Export to HTML and PDF**, and native printing (⌘P)
 - Word count, undo/redo, drag-and-drop to open, unsaved-changes protection
 

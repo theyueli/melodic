@@ -289,6 +289,24 @@
       }
       results.tailFollow = wasFollowing && grew && reloaded;
     }
+
+    // 20. mode defaults by extension: unknown files open plain (byte-safe), .md opens as markdown
+    {
+      const doc = window.__doc;
+      const json = '/tmp/melodic-e2e-data.json';
+      await window.api.saveFile({ filePath: json, content: '{\n  "answer": 42\n}' });
+      doc.markClean();
+      await doc.openPath(json);
+      await sleep(80);
+      const jsonPlain = doc.isPlain() && !doc.isFollowing();
+      const md = '/tmp/melodic-e2e-doc.md';
+      await window.api.saveFile({ filePath: md, content: '# Heading\n\nbody' });
+      doc.markClean();
+      await doc.openPath(md);
+      await sleep(80);
+      const mdRendered = !doc.isPlain() && !!write.querySelector('h1');
+      results.modeByExtension = jsonPlain && mdRendered;
+    }
   } catch (err) {
     results.error = String(err && err.stack ? err.stack : err);
   }

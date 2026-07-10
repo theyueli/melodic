@@ -18,7 +18,11 @@ let plainMode = false;   // verbatim text mode (.log default) — no markdown
 let following = false;   // tail-follow the open file
 let folder = null; // { root, name, tree }
 
-const PLAIN_EXT_RE = /\.log$/i;
+/* extensions rendered as markdown; anything else opens verbatim (plain mode),
+ * which also keeps save byte-safe — the markdown round-trip normalizes
+ * whitespace and must never touch a file it doesn't understand */
+const MD_MODE_RE = /\.(md|markdown|mdown|mkd|txt)$/i;
+const FOLLOW_EXT_RE = /\.log$/i;
 
 /* ---------------- editor ---------------- */
 
@@ -271,7 +275,7 @@ writeEl.addEventListener(
 
 function loadDocument(text, path) {
   filePath = path || null;
-  plainMode = !!(filePath && PLAIN_EXT_RE.test(filePath));
+  plainMode = !!(filePath && !MD_MODE_RE.test(filePath));
   setBaseDir(filePath ? filePath.replace(/\/[^/]*$/, '') : null);
   loadingDoc = true;
   clearTimeout(changeTimer);
@@ -303,7 +307,7 @@ async function openPath(p) {
     alert('Could not open file:\n' + res.error);
     return;
   }
-  following = PLAIN_EXT_RE.test(p); // tail .log files by default
+  following = FOLLOW_EXT_RE.test(p); // tail .log files by default
   loadDocument(res.content, p);
 }
 
@@ -673,7 +677,7 @@ window.addEventListener('dragover', (e) => e.preventDefault());
 window.addEventListener('drop', (e) => {
   e.preventDefault();
   const file = e.dataTransfer.files && e.dataTransfer.files[0];
-  if (file && /\.(md|markdown|mdown|mkd|txt)$/i.test(file.name)) {
+  if (file) {
     const p = window.api.getPathForFile(file);
     if (p) openPath(p);
   }

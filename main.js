@@ -34,7 +34,14 @@ app.on('second-instance', (e, argv) => {
 });
 
 function fileArgFromArgv(argv) {
-  return argv.slice(1).find((a) => /\.(md|markdown|mdown|txt)$/i.test(a) && fs.existsSync(a)) || null;
+  return argv.slice(1).find((a) => {
+    if (a.startsWith('-')) return false;
+    try {
+      return fs.statSync(a).isFile();
+    } catch {
+      return false;
+    }
+  }) || null;
 }
 
 function readConfig() {
@@ -270,8 +277,10 @@ ipcMain.handle('dialog:openFile', async (e) => {
   const res = await dialog.showOpenDialog(senderWin(e), {
     properties: ['openFile'],
     filters: [
+      { name: 'All Supported', extensions: ['md', 'markdown', 'mdown', 'mkd', 'txt', 'log'] },
       { name: 'Markdown', extensions: ['md', 'markdown', 'mdown', 'mkd'] },
-      { name: 'Text and Logs', extensions: ['txt', 'log'] }
+      { name: 'Text and Logs', extensions: ['txt', 'log'] },
+      { name: 'All Files', extensions: ['*'] }
     ]
   });
   if (res.canceled || !res.filePaths.length) return null;
